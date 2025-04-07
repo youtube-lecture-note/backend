@@ -10,17 +10,19 @@ public class Quiz {
     private List<String> options;
     private String correctAnswer;
     private int timestamp;
-    private String subjectiveAnswer; //주관식 응답
+    private String comment; //설명
 
-    public Quiz(String question, List<String> options, String correctAnswer, int timestamp) {
+    public Quiz(String question, List<String> options, String correctAnswer, String comment, int timestamp) {
         this.question = question;
         this.options = options;
         this.correctAnswer = correctAnswer;
         this.timestamp = timestamp;
+        this.comment = comment;
     }
-    public Quiz(String question, String subjectiveAnswer, int timestamp) {
+    //주관식 문제: 기존 정답을 기반으로 채점 시 gpt에 요청하기
+    public Quiz(String question, String correctAnswer, int timestamp) {
         this.question = question;
-        this.subjectiveAnswer = subjectiveAnswer;
+        this.correctAnswer = correctAnswer;
         this.timestamp = timestamp;
     }
 
