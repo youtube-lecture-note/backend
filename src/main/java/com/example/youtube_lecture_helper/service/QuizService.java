@@ -5,7 +5,6 @@ import com.example.youtube_lecture_helper.openai_api.Quiz;
 import com.example.youtube_lecture_helper.repository.DummyQuizRepository;
 import com.example.youtube_lecture_helper.repository.DummySummaryRepository;
 import com.example.youtube_lecture_helper.repository.QuizRepository;
-import com.example.youtube_lecture_helper.repository.SummaryRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
