@@ -1,4 +1,4 @@
-package org.example;
+package com.example.youtube_lecture_helper.openai_api;
 
 public class SubtitleLine {
     private final Integer start;
