@@ -1,8 +1,11 @@
-package org.example;
+package com.example.youtube_lecture_helper.openai_api;
 
 import okhttp3.*;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -12,7 +15,9 @@ import java.util.List;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
+
 //영상 5분당 요청 1번 보내기=>비동기 처리
+@Component
 public class OpenAIGptClient {
     private static final String API_URL = "https://api.openai.com/v1/chat/completions";
     private static final String API_KEY = System.getenv("OPENAI_API_KEY");
@@ -21,69 +26,16 @@ public class OpenAIGptClient {
     private String summaryModel;
     private String quizModel;
 
-    public void setQuizModel(String quizModel){
-        this.quizModel = quizModel;
-    }
-    public void setSummaryModel(String summaryModel){
-        this.summaryModel = summaryModel;
-    }
-
-    public OpenAIGptClient(int threadPoolSize, String summaryModel, String quizModel) {
+    public OpenAIGptClient(){
         this.client = new OkHttpClient.Builder()
                 .readTimeout(120, TimeUnit.SECONDS)
                 .build();
-        this.executor = Executors.newFixedThreadPool(threadPoolSize);
-        this.summaryModel = summaryModel;
-        this.quizModel = quizModel;
+        this.executor = Executors.newFixedThreadPool(12);
+        this.summaryModel = "gpt-4o-mini";
+        this.quizModel = "gpt-4o-2024-08-06";
     }
 
-    public String sendCaptionAndGetQuiz(String caption) throws IOException{
-        JSONObject requestBody = new JSONObject();
-        requestBody.put("model", "gpt-4o-mini");
-        requestBody.put("messages", new JSONArray()
-                .put(new JSONObject().put("role", "system").put("content", "You are an educational quiz generator who communicates in Korean. " +
-                        "Create quizzes question strictly based on the information provided in lecutre summaries. " +
-                        "Focus on the key points and important ideas. Avoid questions about trivial or overly detailed information. " +
-                        "Do not use any external knowledge or assumptions beyond what is explicitly stated in the input content. " +
-                        "Each question must be directly answerable from the lecture content provided and should be clear and relevant to test the understanding of the material. " +
-                        "Provide four answer choices, including one correct answer and three plausible but incorrect options. " +
-                        "The question should test conceptual understanding rather than just memorization. "+
-                        "And give timestamps corresponding to each question" +
-                        "Generate a quiz in the following format without numbering:\n" +
-                        "[Question];[Option 1];[Option 2];[Option 3];[Option 4];[Answer];[timestamp]" +
-                        "Example: " + "What does a molecular formula represent?;It represents the properties of an atom.;It represents the types and numbers of atoms in a molecule.;It represents the state of a substance.;It represents the result of a chemical reaction.;B;10  \n" + "What does a cation mean?;It is an ion that loses electrons and carries a positive charge.;It is an ion that gains electrons and carries a negative charge.;It has an equal number of electrons and protons.;It is an ion without electrons.;A;250  "
-                ))
-                .put(new JSONObject().put("role", "user").put("content", caption))
-        );
-        requestBody.put("temperature", 0.5);
-
-        // HTTP 요청 생성
-        Request request = new Request.Builder()
-                .url(API_URL)
-                .post(RequestBody.create(requestBody.toString(), MediaType.get("application/json; charset=utf-8")))
-                .addHeader("Authorization", "Bearer " + API_KEY)
-                .addHeader("Content-Type", "application/json")
-                .build();
-
-        // 요청 실행 및 응답 처리
-        try (Response response = client.newCall(request).execute()) {
-            if (!response.isSuccessful()) {
-                return "Error: " + response.code() + " - " + response.message();
-            }
-
-            // JSON 응답에서 메시지 추출
-            JSONObject responseBody = new JSONObject(response.body().string());
-            return responseBody.getJSONArray("choices")
-                    .getJSONObject(0)
-                    .getJSONObject("message")
-                    .getString("content");
-        }
-    }
-
-
-
-
-    public CompletableFuture<List<Quiz>> sendSummariesAndGetQuizzesAsync(String summary) {
+    public CompletableFuture<List<Quiz>> sendSummariesAndGetQuizzesAsync(String videoId, String summary) {
         List<String> summaries = LectureSummarySplitter.splitLectureSummary(summary);
         int i =0;
         for(String sm: summaries){
@@ -93,7 +45,7 @@ public class OpenAIGptClient {
         List<CompletableFuture<List<Quiz>>> futures = new ArrayList<>();
 
         for (String sm : summaries) {
-            futures.add(sendSummaryAndGetQuizAsync(sm));
+            futures.add(sendSummaryAndGetQuizAsync(videoId, sm));
         }
 
         // Combine all futures to a list of QuizQuestions
@@ -110,7 +62,7 @@ public class OpenAIGptClient {
                     return quizQuestions;
                 });
     }
-    private CompletableFuture<List<Quiz>> sendSummaryAndGetQuizAsync(String summary) {
+    private CompletableFuture<List<Quiz>> sendSummaryAndGetQuizAsync(String videoId, String summary) {
 
         JSONObject requestBody = new JSONObject();
         requestBody.put("model", quizModel);
@@ -152,7 +104,7 @@ public class OpenAIGptClient {
                         .getJSONObject(0)
                         .getJSONObject("message")
                         .getString("content");
-                return parseQuizResponse(content);
+                return parseQuizResponse(videoId, content);
             } catch (IOException e) {
                 e.printStackTrace();
                 return null; // Handle error scenario
@@ -160,7 +112,7 @@ public class OpenAIGptClient {
         },executor);
     }
 
-    private List<Quiz> parseQuizResponse(String responseContent) {
+    private List<Quiz> parseQuizResponse(String videoId, String responseContent) {
         String[] quizLines = responseContent.split("\n");
         List<Quiz> quizzes = new ArrayList<>();
 
@@ -175,7 +127,7 @@ public class OpenAIGptClient {
                         .map(option -> option.replaceFirst("^\\d+\\.\\s*", "")) // "1. " 제거
                         .toList();
                 // 각 문제에 대해 Quiz 객체 생성
-                quizzes.add(new Quiz(quizElement[0].trim(), optionsList, quizElement[5].trim(), quizElement[6].trim(), Integer.parseInt(quizElement[7].trim())));
+                quizzes.add(new Quiz(videoId, quizElement[0].trim(), optionsList, quizElement[5].trim(), quizElement[6].trim(), Integer.parseInt(quizElement[7].trim())));
 //                System.out.println("Print: " + quizElement[0].trim() + optionsList + quizElement[5].trim() + Integer.parseInt(quizElement[6].trim()));
             }catch(Exception e){
                 System.out.println("Error parsing line, skipping: " + quizLines[i]);
@@ -313,7 +265,7 @@ public class OpenAIGptClient {
 
     private String getSummaryBySubtitleChunk(List<SubtitleLine> chunk) {
         String caption = chunk.stream()
-                .map(org.example.SubtitleLine::toString)
+                .map(SubtitleLine::toString)
                 .reduce("", (a, b) -> a + "\n" + b);
         try{
             return sendCaptionAndGetSummary(caption);
@@ -334,12 +286,12 @@ public class OpenAIGptClient {
         }
     }
 
-    public CompletableFuture<List<Quiz>> sendSummariesAndGetQuizzesAsyncV2(String summary, QuizType quizType) {
+    public CompletableFuture<List<Quiz>> sendSummariesAndGetQuizzesAsyncV2(String videoId, String summary, QuizType quizType) {
         List<String> summaries = LectureSummarySplitter.splitLectureSummary(summary);
         List<CompletableFuture<List<Quiz>>> futures = new ArrayList<>();
 
         for (String sm : summaries) {
-            futures.add(sendSummaryAndGetQuizAsyncV2(sm, quizType));
+            futures.add(sendSummaryAndGetQuizAsyncV2(videoId, sm, quizType));
         }
 
         return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
@@ -382,7 +334,7 @@ public class OpenAIGptClient {
         return "";
     }
 
-    private CompletableFuture<List<Quiz>> sendSummaryAndGetQuizAsyncV2(String summary, QuizType quizType) {
+    private CompletableFuture<List<Quiz>> sendSummaryAndGetQuizAsyncV2(String videoId, String summary, QuizType quizType) {
         String systemPrompt = generateSystemPrompt(quizType);
 
         JSONObject requestBody = new JSONObject();
@@ -414,8 +366,8 @@ public class OpenAIGptClient {
 
                 // 퀴즈 유형에 따라 파싱 함수 분기
                 return quizType == QuizType.MULTIPLE_CHOICE
-                        ? parseQuizResponse(content)
-                        : parseShortAnswerQuizResponse(content);
+                        ? parseQuizResponse(videoId, content)
+                        : parseShortAnswerQuizResponse(videoId, content);
 
             } catch (IOException e) {
                 e.printStackTrace();
@@ -424,7 +376,7 @@ public class OpenAIGptClient {
         }, executor);
     }
 
-    private List<Quiz> parseShortAnswerQuizResponse(String responseContent) {
+    private List<Quiz> parseShortAnswerQuizResponse(String videoId, String responseContent) {
         String[] quizLines = responseContent.split("\n");
         List<Quiz> quizzes = new ArrayList<>();
 
@@ -434,6 +386,7 @@ public class OpenAIGptClient {
                 if (parts.length != 4) continue;
 
                 quizzes.add(new Quiz(
+                        videoId,
                         parts[0].trim(), // question
                         null,            // options (null for short-answer)
                         parts[1].trim(), // correctAnswer
