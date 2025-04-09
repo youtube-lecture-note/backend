@@ -25,6 +25,7 @@ repositories {
 
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter'
+	implementation 'org.springframework.boot:spring-boot-starter-web'
 	implementation("org.json:json:20230227")
 	implementation("org.jsoup:jsoup:1.16.1")
 	implementation("com.squareup.okhttp3:okhttp:4.9.3")
