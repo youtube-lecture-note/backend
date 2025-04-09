@@ -1,8 +1,10 @@
 package com.example.youtube_lecture_helper.service;
 
+import com.example.youtube_lecture_helper.SummaryStatus;
 import com.example.youtube_lecture_helper.openai_api.OpenAIGptClient;
 import com.example.youtube_lecture_helper.openai_api.Quiz;
 import com.example.youtube_lecture_helper.openai_api.QuizType;
+import com.example.youtube_lecture_helper.openai_api.SummaryResult;
 import com.example.youtube_lecture_helper.repository.DummyQuizRepository;
 import com.example.youtube_lecture_helper.repository.DummySummaryRepository;
 import com.example.youtube_lecture_helper.repository.QuizRepository;
@@ -25,18 +27,18 @@ public class CreateSummaryAndQuizService {
         this.gptClient = gptClient;
     }
 
-    //null or summary 반환
-    public String generateSummaryQuizAndSave(String videoId) {
-        CompletableFuture<String> videoSummaryFuture = gptClient.getVideoSummaryAsync("Bh6WtpsStpM", "ko");
+    public SummaryResult generateSummaryQuizAndSave(String videoId) {
+        CompletableFuture<SummaryResult> videoSummaryFuture = gptClient.getVideoSummaryAsync(videoId, "ko");
 
-        String videoSummary = videoSummaryFuture.join();
+        SummaryResult summaryResult = videoSummaryFuture.join();
 
-        if (videoSummary==null || (videoSummary != null && videoSummary.equals("-1"))){
-            return null;   //not a lecture video
+        if (summaryResult.getStatus()==SummaryStatus.NO_SUBTITLE || summaryResult.getStatus()== SummaryStatus.NOT_LECTURE){
+            return summaryResult;   //퀴즈 생성하지 않고 반환
         }
+        String summaryString = summaryResult.getSummary();
         
-        CompletableFuture<List<Quiz>> futureQuizzesV2_choice = gptClient.sendSummariesAndGetQuizzesAsyncV2(videoId, videoSummary, QuizType.MULTIPLE_CHOICE);
-        CompletableFuture<List<Quiz>> futureQuizzesV2_short = gptClient.sendSummariesAndGetQuizzesAsyncV2(videoId, videoSummary, QuizType.SHORT_ANSWER);
+        CompletableFuture<List<Quiz>> futureQuizzesV2_choice = gptClient.sendSummariesAndGetQuizzesAsyncV2(videoId, summaryString, QuizType.MULTIPLE_CHOICE);
+        CompletableFuture<List<Quiz>> futureQuizzesV2_short = gptClient.sendSummariesAndGetQuizzesAsyncV2(videoId, summaryString, QuizType.SHORT_ANSWER);
 
         //List<Quiz> quizList = futureQuizzes.join();
 
@@ -45,7 +47,7 @@ public class CreateSummaryAndQuizService {
         quizListV2.addAll(futureQuizzesV2_short.join());
 
         quizRepository.save(videoId,quizListV2);
-        summaryRepository.save(videoId,videoSummary);
-        return videoSummary;
+        summaryRepository.save(videoId,summaryResult.getSummary());
+        return summaryResult;
     }
 }

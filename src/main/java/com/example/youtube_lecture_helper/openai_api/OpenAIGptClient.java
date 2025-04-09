@@ -1,5 +1,6 @@
 package com.example.youtube_lecture_helper.openai_api;
 
+import com.example.youtube_lecture_helper.SummaryStatus;
 import okhttp3.*;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -174,19 +175,19 @@ public class OpenAIGptClient {
      * @param language The language code for subtitles
      * @return CompletableFuture that will contain the complete summary
      */
-    public CompletableFuture<String> getVideoSummaryAsync(String videoId, String language) {
+    public CompletableFuture<SummaryResult> getVideoSummaryAsync(String videoId, String language) {
         return CompletableFuture.supplyAsync(() -> {
             try{
                 List<List<SubtitleLine>> subtitleChunks = YoutubeSubtitleExtractor.getSubtitles(videoId, language);
                 System.out.println("subtitle check complete");
                 return processSubtitleChunks(subtitleChunks);
             }catch(Exception e){
-                return null;
+                return new SummaryResult(SummaryStatus.NO_SUBTITLE,null);
             }
         }, executor);
     }
 
-    private String processSubtitleChunks(List<List<SubtitleLine>> subtitleChunks) {
+    private SummaryResult processSubtitleChunks(List<List<SubtitleLine>> subtitleChunks) {
         try {
             List<CompletableFuture<String>> futures = new ArrayList<>();
 
@@ -208,7 +209,12 @@ public class OpenAIGptClient {
             );
 
             List<String> summaries = resultsFuture.get();
-            return String.join("\n\n", summaries);
+            for(String summary: summaries){
+                if(summary.trim().equals("-1")){
+                    return new SummaryResult(SummaryStatus.NOT_LECTURE,null);
+                }
+            }
+            return new SummaryResult(SummaryStatus.SUCCESS, String.join("\n\n", summaries));
         } catch (Exception e) {
             throw new RuntimeException("Failed to process subtitle chunks: " + e.getMessage(), e);
         }

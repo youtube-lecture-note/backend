@@ -1,6 +1,8 @@
 package com.example.youtube_lecture_helper.service;
 
+import com.example.youtube_lecture_helper.SummaryStatus;
 import com.example.youtube_lecture_helper.openai_api.OpenAIGptClient;
+import com.example.youtube_lecture_helper.openai_api.SummaryResult;
 import com.example.youtube_lecture_helper.repository.DummySummaryRepository;
 import com.example.youtube_lecture_helper.repository.SummaryRepository;
 import org.springframework.stereotype.Service;
@@ -18,13 +20,14 @@ public class SummaryService {
         this.createSummaryAndQuizService = createSummaryAndQuizService;
     }
 
-    public String getSummary(String videoId){
+    public SummaryResult getSummary(String videoId){
         //repo 보고 없으면 gptClient 호출하기
         String summary = summaryRepository.findByVideoId(videoId);
         //summary 없으면 퀴즈와 함께 생성 후 둘다 레포지토리에 저장
         if(summary==null){
-            summary = createSummaryAndQuizService.generateSummaryQuizAndSave(videoId);
+            return createSummaryAndQuizService.generateSummaryQuizAndSave(videoId);
+        }else{
+            return new SummaryResult(SummaryStatus.SUCCESS,summary);
         }
-        return summary;
     }
 }

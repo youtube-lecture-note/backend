@@ -1,6 +1,8 @@
 package com.example.youtube_lecture_helper.controller;
 
+import com.example.youtube_lecture_helper.SummaryStatus;
 import com.example.youtube_lecture_helper.openai_api.OpenAIGptClient;
+import com.example.youtube_lecture_helper.openai_api.SummaryResult;
 import com.example.youtube_lecture_helper.service.SummaryService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -29,14 +31,14 @@ public class SummaryController {
     @GetMapping(value = "/api/summary", produces = "application/json")
     //ApiResponse<String>
     public ResponseEntity<ApiResponse<String>> getSummary(@RequestParam String videoId) {
-        String summary = summaryService.getSummary(videoId);
-        if(summary == null){
-            return ApiResponse.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR,"cannot create summary","");
+        SummaryResult summaryResult = summaryService.getSummary(videoId);
+        if(summaryResult.getStatus()== SummaryStatus.NO_SUBTITLE){
+            return ApiResponse.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR,"자막 없음","");
         }
-        if(summary.equals("-1")){
+        if(summaryResult.getStatus()== SummaryStatus.NOT_LECTURE){
             return ApiResponse.buildResponse(HttpStatus.BAD_REQUEST, "강의 영상 아님", "");
         }
-        System.out.println("summary: " + summary);
-        return ApiResponse.buildResponse(HttpStatus.OK, "성공", summary);
+        System.out.println("summary: " + summaryResult.getSummary());
+        return ApiResponse.buildResponse(HttpStatus.OK, "성공", summaryResult.getSummary());
     }
 }
