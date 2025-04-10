@@ -30,7 +30,7 @@ public class OpenAIGptClient {
         this.client = new OkHttpClient.Builder()
                 .readTimeout(120, TimeUnit.SECONDS)
                 .build();
-        this.executor = Executors.newFixedThreadPool(12);
+        this.executor = Executors.newFixedThreadPool(8);
         this.summaryModel = "gpt-4o-mini";
         this.quizModel = "gpt-4o-2024-08-06";
     }
