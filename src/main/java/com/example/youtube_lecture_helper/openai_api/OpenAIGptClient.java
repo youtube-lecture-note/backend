@@ -1,11 +1,10 @@
 package com.example.youtube_lecture_helper.openai_api;
 
 import com.example.youtube_lecture_helper.SummaryStatus;
+import com.example.youtube_lecture_helper.entity.Quiz;
 import okhttp3.*;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -131,8 +130,9 @@ public class OpenAIGptClient {
                 quizzes.add(new Quiz(videoId, quizElement[0].trim(), optionsList, quizElement[5].trim(), quizElement[6].trim(), Integer.parseInt(quizElement[7].trim())));
 //                System.out.println("Print: " + quizElement[0].trim() + optionsList + quizElement[5].trim() + Integer.parseInt(quizElement[6].trim()));
             }catch(Exception e){
+                //파싱 실패할 경우 처리해야 함
                 System.out.println("Error parsing line, skipping: " + quizLines[i]);
-                e.printStackTrace();  // 필요시 스택 트레이스를 출력하여 디버깅 정보 제공
+                e.printStackTrace(); 
             }
         }
 

@@ -1,10 +1,8 @@
 package com.example.youtube_lecture_helper.controller;
 
 import com.example.youtube_lecture_helper.SummaryStatus;
-import com.example.youtube_lecture_helper.openai_api.OpenAIGptClient;
 import com.example.youtube_lecture_helper.openai_api.SummaryResult;
-import com.example.youtube_lecture_helper.service.SummaryService;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.example.youtube_lecture_helper.service.VideoService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -23,15 +21,16 @@ public class SummaryController {
 //        //Bh6WtpsStpM : 중학교 2학년 과학 (17분)
 //        //veTpPfu1-o8 : 뱀(58분)
 //        //vLaFAKnaRJU : 영어강의
-    private final SummaryService summaryService;
-    public SummaryController(SummaryService summaryService){
-        this.summaryService = summaryService;
+    //private final SummaryService summaryService;
+    private final VideoService videoService;
+    public SummaryController(VideoService videoService){
+        this.videoService = videoService;
     }
 
     @GetMapping(value = "/api/summary", produces = "application/json")
     //ApiResponse<String>
     public ResponseEntity<ApiResponse<String>> getSummary(@RequestParam String videoId) {
-        SummaryResult summaryResult = summaryService.getSummary(videoId);
+        SummaryResult summaryResult = videoService.getSummary(videoId);
         if(summaryResult.getStatus()== SummaryStatus.NO_SUBTITLE){
             return ApiResponse.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR,"자막 없음","");
         }

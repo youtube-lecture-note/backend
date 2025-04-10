@@ -1,11 +1,10 @@
 package com.example.youtube_lecture_helper.controller;
 
 import com.example.youtube_lecture_helper.openai_api.OpenAIGptClient;
-import com.example.youtube_lecture_helper.openai_api.Quiz;
-import com.example.youtube_lecture_helper.repository.DummyQuizRepository;
-import com.example.youtube_lecture_helper.service.SummaryService;
+import com.example.youtube_lecture_helper.entity.Quiz;
+import com.example.youtube_lecture_helper.repository.QuizRepository;
+import com.example.youtube_lecture_helper.service.QuizService;
 import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Controller;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -17,17 +16,17 @@ import java.util.List;
 public class QuizController {
 
     private final OpenAIGptClient gptClient;
-    private final DummyQuizRepository dummyQuizRepository;
-    public  QuizController(OpenAIGptClient gptClient, DummyQuizRepository dummyQuizRepository){
+    private final QuizService quizService;
+    public  QuizController(OpenAIGptClient gptClient, QuizService quizService){
         this.gptClient = gptClient;
-        this.dummyQuizRepository=dummyQuizRepository;
+        this.quizService=quizService;
     }
 
     @GetMapping("/api/quizzes")
     public ResponseEntity<ApiResponse<List<Quiz>>> getAllQuizzes(@RequestParam String videoId){
-        List<Quiz> quizzes = dummyQuizRepository.findByVideoId(videoId);
+        List<Quiz> quizzes = quizService.getQuizzes(videoId);
         if(quizzes.size()>0) {
-            return ApiResponse.buildResponse(HttpStatus.OK, "success", dummyQuizRepository.findByVideoId(videoId));
+            return ApiResponse.buildResponse(HttpStatus.OK, "success", quizzes);
         }else return ApiResponse.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "NO QUIZ GENERATED", null);
 
     }

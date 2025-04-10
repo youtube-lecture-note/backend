@@ -1,13 +1,12 @@
 package com.example.youtube_lecture_helper.repository;
 
-import com.example.youtube_lecture_helper.openai_api.Quiz;
+import com.example.youtube_lecture_helper.entity.Quiz;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
-import java.util.Optional;
 
-public interface QuizRepository {
-    List<Quiz> findByVideoId(String videoId);
-    List<Quiz> save(String videoId, List<Quiz> quizzes);
-    List<Quiz> findAll();
+@Repository
+public interface QuizRepository extends JpaRepository<Quiz,Long> {
+    List<Quiz> findByYoutubeId(String youtubeId);
 }

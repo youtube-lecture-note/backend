@@ -1,14 +1,13 @@
 package com.example.youtube_lecture_helper.service;
 
 import com.example.youtube_lecture_helper.SummaryStatus;
+import com.example.youtube_lecture_helper.entity.Video;
 import com.example.youtube_lecture_helper.openai_api.OpenAIGptClient;
-import com.example.youtube_lecture_helper.openai_api.Quiz;
+import com.example.youtube_lecture_helper.entity.Quiz;
 import com.example.youtube_lecture_helper.openai_api.QuizType;
 import com.example.youtube_lecture_helper.openai_api.SummaryResult;
-import com.example.youtube_lecture_helper.repository.DummyQuizRepository;
-import com.example.youtube_lecture_helper.repository.DummySummaryRepository;
 import com.example.youtube_lecture_helper.repository.QuizRepository;
-import com.example.youtube_lecture_helper.repository.SummaryRepository;
+import com.example.youtube_lecture_helper.repository.VideoRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -18,15 +17,16 @@ import java.util.concurrent.CompletableFuture;
 @Service
 public class CreateSummaryAndQuizService {
     private final OpenAIGptClient gptClient;
-    private final SummaryRepository summaryRepository;
+    private final VideoRepository videoRepository;
     private final QuizRepository quizRepository;
 
-    public CreateSummaryAndQuizService(SummaryRepository summaryRepository, QuizRepository quizRepository, OpenAIGptClient gptClient ){
-        this.summaryRepository = summaryRepository;
+    public CreateSummaryAndQuizService(VideoRepository videoRepository, QuizRepository quizRepository, OpenAIGptClient gptClient ){
+        this.videoRepository = videoRepository;
         this.quizRepository = quizRepository;
         this.gptClient = gptClient;
     }
-
+    
+    //video 존재하는지 검색 후에 호출
     public SummaryResult generateSummaryQuizAndSave(String videoId) {
         CompletableFuture<SummaryResult> videoSummaryFuture = gptClient.getVideoSummaryAsync(videoId, "ko");
 
@@ -46,8 +46,8 @@ public class CreateSummaryAndQuizService {
         quizListV2.addAll(futureQuizzesV2_choice.join());
         quizListV2.addAll(futureQuizzesV2_short.join());
 
-        quizRepository.save(videoId,quizListV2);
-        summaryRepository.save(videoId,summaryResult.getSummary());
+        quizRepository.saveAll(quizListV2);
+        videoRepository.save(new Video(videoId,summaryResult.getSummary()));
         return summaryResult;
     }
 }
