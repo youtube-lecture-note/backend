@@ -1,5 +1,6 @@
 #env
 .env
+src/main/resources/secret.properties
 
 HELP.md
 .gradle
