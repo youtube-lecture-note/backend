@@ -26,11 +26,14 @@ repositories {
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+
 	implementation("org.json:json:20230227")
 	implementation("org.jsoup:jsoup:1.16.1")
 	implementation("com.squareup.okhttp3:okhttp:4.9.3")
 
-	compileOnly 'org.projectlombok:lombok'
+
+    compileOnly 'org.projectlombok:lombok'
 	runtimeOnly 'com.mysql:mysql-connector-j'
 
 	annotationProcessor 'org.projectlombok:lombok'
