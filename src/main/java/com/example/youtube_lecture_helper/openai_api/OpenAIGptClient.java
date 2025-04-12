@@ -407,14 +407,14 @@ public class OpenAIGptClient {
         return quizzes;
     }
 
-    public boolean isCorrectSubjectiveAnswer(String question, String correctAnswer, String userAnswer, String model){
+    public boolean isCorrectSubjectiveAnswer(String question, String correctAnswer, String userAnswer){
         String prompt = String.format("""
             문제: %s
             정답: %s
             사용자 답변: %s
             """, question, correctAnswer, userAnswer);
 
-        String result = ask(prompt,model);
+        String result = ask(prompt,quizModel);
         result = result.trim();
 
         // 결과가 정확하게 1 또는 0인지 확인 후 정수 반환
