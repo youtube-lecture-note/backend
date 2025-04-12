@@ -1,22 +1,27 @@
 package com.example.youtube_lecture_helper.entity;
+import com.example.youtube_lecture_helper.openai_api.QuizType;
 import jakarta.persistence.*;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.util.List;
 
 @Getter
 @Entity
+@NoArgsConstructor
 public class Quiz {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-//    @ManyToOne(fetch = FetchType.LAZY)
-//    @JoinColumn(name = "video_id")
-//
-//    private Video video;
-    private String youtubeId;
+//  @ManyToOne(fetch = FetchType.LAZY)
+//  @JoinColumn(name = "video_id")
+//  private Video video;
+    private String youtubeId;   //video와 별도로 일관성 유지 필요
     private String question;
+
+    @Enumerated(EnumType.STRING)
+    private QuizType quizType;
 
     private String option1;
     private String option2;
@@ -26,7 +31,6 @@ public class Quiz {
     private String correctAnswer;
     private int timestamp;
     private String comment; //설명
-    public Quiz(){}
 
     public Quiz(String videoId, String question, List<String> options, String correctAnswer, String comment, int timestamp) {
         this.youtubeId = videoId;
@@ -37,6 +41,9 @@ public class Quiz {
             this.option2 = options.get(1);
             this.option3 = options.get(2);
             this.option4 = options.get(3);
+            this.quizType = QuizType.MULTIPLE_CHOICE;
+        }else{
+            this.quizType = QuizType.SHORT_ANSWER;
         }
 
         this.correctAnswer = correctAnswer;
@@ -51,4 +58,7 @@ public class Quiz {
         this.timestamp = timestamp;
     }
 
+    public Quiz(Long quizId){
+        this.id = quizId;
+    }
 }
