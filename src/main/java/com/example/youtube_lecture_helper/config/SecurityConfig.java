@@ -22,6 +22,7 @@ public class SecurityConfig {
                 //추후 토큰 관리 필요
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
+                
                 .authorizeHttpRequests(authorize -> authorize
                         .anyRequest().permitAll()   //일단 모두 허용
                 );
@@ -50,7 +51,7 @@ public class SecurityConfig {
         configuration.setExposedHeaders(Arrays.asList("Authorization"));
 
         // 자격 증명(쿠키 등) 허용
-        configuration.setAllowCredentials(true);
+        //configuration.setAllowCredentials(true);
 
         // Max Age 설정 (초 단위)
         configuration.setMaxAge(3600L);
