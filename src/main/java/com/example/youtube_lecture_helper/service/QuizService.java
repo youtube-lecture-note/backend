@@ -5,24 +5,48 @@ import com.example.youtube_lecture_helper.exception.QuizNotFoundException;
 import com.example.youtube_lecture_helper.openai_api.OpenAIGptClient;
 import com.example.youtube_lecture_helper.entity.Quiz;
 import com.example.youtube_lecture_helper.openai_api.QuizType;
+import com.example.youtube_lecture_helper.openai_api.SummaryResult;
 import com.example.youtube_lecture_helper.repository.QuizRepository;
+import com.example.youtube_lecture_helper.repository.projection.QuizId;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+import static com.example.youtube_lecture_helper.SummaryStatus.SUCCESS;
 
 @Service
 public class QuizService {
     private final QuizRepository quizRepository;
     private final OpenAIGptClient gptClient;    //주관식 정답 맞출 때 필요
     private final QuizLogService quizLogService;
-    public QuizService(OpenAIGptClient gptClient, QuizRepository quizRepository, QuizLogService quizLogService){
+    private final VideoService videoService;
+    public QuizService(OpenAIGptClient gptClient, QuizRepository quizRepository, QuizLogService quizLogService, VideoService videoService){
         this.gptClient = gptClient;
         this.quizRepository = quizRepository;
         this.quizLogService = quizLogService;
+        this.videoService=videoService;
     }
 
-    public List<Quiz> getQuizzes(String youtubeId){
-        return quizRepository.findByYoutubeId(youtubeId);
+    public List<Quiz> getQuizzes(String youtubeId, int requestNumber){
+        if(!videoService.check_if_exists()){
+            SummaryResult result = videoService.generateSummaryQuizAndSave(youtubeId);
+            if(result.getStatus()!=SUCCESS){
+                return null;
+            }
+        }
+        List<QuizId> allQuizzes = quizRepository.findByYoutubeId(youtubeId);
+        List<Long> quizIds = allQuizzes.stream()
+                .map(QuizId::getId)
+                .collect(Collectors.toList());
+        Collections.shuffle(quizIds);
+        int limit = Math.min(quizIds.size(), requestNumber);
+        List<Long> pickedIds = quizIds.subList(0, limit);
+        // 📌 JPA에서 여러 ID로 한 번에 가져오기
+        return quizRepository.findAllById(pickedIds);
     }
 
     //틀린 결과만 제공

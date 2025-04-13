@@ -23,8 +23,8 @@ public class QuizController {
 
     @GetMapping("/api/quizzes")
     public ResponseEntity<ApiResponse<List<Quiz>>> getAllQuizzes(@RequestParam String videoId){
-        List<Quiz> quizzes = quizService.getQuizzes(videoId);
-        if(quizzes.size()>0) {
+        List<Quiz> quizzes = quizService.getQuizzes(videoId,5);
+        if(quizzes!=null|| !quizzes.isEmpty()) {
             return ApiResponse.buildResponse(HttpStatus.OK, "success", quizzes);
         }else return ApiResponse.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "NO QUIZ GENERATED", null);
     }
