@@ -127,7 +127,14 @@ public class OpenAIGptClient {
                         .map(option -> option.replaceFirst("^\\d+\\.\\s*", "")) // "1. " 제거
                         .toList();
                 // 각 문제에 대해 Quiz 객체 생성
-                quizzes.add(new Quiz(videoId, quizElement[0].trim(), optionsList, quizElement[5].trim(), quizElement[6].trim(), Integer.parseInt(quizElement[7].trim())));
+                quizzes.add(new Quiz(
+                        videoId,
+                        (byte) 2,  //difficulty: 나중에 추가해야됨
+                        quizElement[0].trim(),
+                        optionsList,
+                        quizElement[5].trim(),
+                        quizElement[6].trim(),
+                        Integer.parseInt(quizElement[7].trim())));
 //                System.out.println("Print: " + quizElement[0].trim() + optionsList + quizElement[5].trim() + Integer.parseInt(quizElement[6].trim()));
             }catch(Exception e){
                 //파싱 실패할 경우 처리해야 함
@@ -330,12 +337,19 @@ public class OpenAIGptClient {
         } else if (type == QuizType.SHORT_ANSWER) {
             return "You are an educational quiz generator who communicates in Korean. " +
                     "Generate short answer questions from the following lecture summary. " +
+                    "Generate only as many questions as are necessary to cover the key conceptual points in the lecture summary." +
                     "Focus on the key points and important ideas. Avoid questions about trivial or overly detailed information. " +
                     "The question should test conceptual understanding rather than just memorization. "+
+                    "Avoid trivial or overly detailed fact‑recall questions. " +
                     "Each question must be based on the lecture content and logically inferable from the provided information, ensuring it aligns with the main themes and concepts discussed. " +
                     "Each question should test understanding of key concepts. Provide the correct answer and timestamp corresponding to each question. " +
                     "Format:\nQuestion;Correct Answer;Explanation of the correct answer;Timestamp as second\n" +
-                    "Example: What is the main function of red blood cells?;To carry oxygen throughout the body.;Red blood cells contain hemoglobin, which binds to oxygen in the lungs and transports it to tissues throughout the body.;240\n";
+                    "Example: What is the main function of red blood cells?;To carry oxygen throughout the body.;Red blood cells contain hemoglobin, which binds to oxygen in the lungs and transports it to tissues throughout the body.;240\n" +
+                    "Examples for good and bad questions ** (for reference only—do **not** copy these):  " +
+                    "- **Bad (rote recall)**:  \n" +
+                    "  “막스 보른은 슈레딩거 방정식에서 어떤 기여를 했는가?;파동 함수의 절댓값 제곱을 확률 해석에 도입했다.;…;1802”  \n" +
+                    "- **Good (analysis)**:  \n" +
+                    "  “파동함수의 절댓값 제곱이 물리적으로 어떤 의미를 가지며, 이를 통해 얻을 수 있는 예측은 무엇인가?;입자의 위치 확률 분포를 나타내며, 특정 구간에 존재할 확률을 계산할 수 있다.;…;1802”" ;
         }
         return "";
     }
@@ -393,6 +407,7 @@ public class OpenAIGptClient {
 
                 quizzes.add(new Quiz(
                         videoId,
+                        (byte) 2,   //난이도 이후에 추가해야됨
                         parts[0].trim(), // question
                         null,            // options (null for short-answer)
                         parts[1].trim(), // correctAnswer
