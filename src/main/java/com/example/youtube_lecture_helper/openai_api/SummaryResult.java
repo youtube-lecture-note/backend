@@ -5,11 +5,14 @@ import lombok.Getter;
 
 @Getter
 public class SummaryResult {
-    private final SummaryStatus status;
-    private final String summary;
+    private SummaryStatus status;
+    private String summary;
 
     public SummaryResult(SummaryStatus status, String summary) {
         this.status = status;
         this.summary = summary;
+    }
+    public boolean isSuccess(){
+        return getStatus()==SummaryStatus.SUCCESS;
     }
 }

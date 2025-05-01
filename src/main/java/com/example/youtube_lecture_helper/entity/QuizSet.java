@@ -3,10 +3,11 @@ package com.example.youtube_lecture_helper.entity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.LocalDateTime;
 
-@Getter
+@Getter @Setter
 @NoArgsConstructor
 @Entity
 public class QuizSet {

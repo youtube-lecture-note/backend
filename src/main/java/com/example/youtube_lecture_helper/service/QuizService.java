@@ -125,6 +125,8 @@ public class QuizService {
 
         return new CreatedQuizSetDTO(savedQuizSet.getId(), questionDTOs);
     }
+
+
     private QuizQuestionDTO mapToQuizQuestionDTO(Quiz quiz) {
         // Assuming Quiz has methods like getId(), getQuestion(), getOptions()
         // Assuming QuizQuestionDTO has corresponding fields/constructor
@@ -142,6 +144,7 @@ public class QuizService {
         public Long getQuizSetId() { return quizSetId; }
         public List<QuizQuestionDTO> getQuestions() { return questions; }
     }
+
 
     public static class QuizQuestionDTO {
         private Long quizId;

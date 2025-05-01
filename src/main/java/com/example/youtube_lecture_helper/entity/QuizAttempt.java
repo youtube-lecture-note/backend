@@ -1,10 +1,12 @@
 package com.example.youtube_lecture_helper.entity;
 
+import com.example.youtube_lecture_helper.dto.QuizAttemptDto;
 import jakarta.persistence.*;
 import lombok.Getter;
+import lombok.Setter;
 
 @Entity
-@Getter
+@Getter @Setter
 public class QuizAttempt {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

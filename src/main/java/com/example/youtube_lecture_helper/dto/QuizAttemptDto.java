@@ -1,5 +1,14 @@
 package com.example.youtube_lecture_helper.dto;
 
+import com.example.youtube_lecture_helper.entity.Quiz;
+import com.example.youtube_lecture_helper.entity.QuizAttempt;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Getter
+@Setter
+@NoArgsConstructor
 public class QuizAttemptDto {
     private Long attemptId;
     private String userAnswer;
