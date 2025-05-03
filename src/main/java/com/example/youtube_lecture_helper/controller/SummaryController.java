@@ -27,29 +27,27 @@ public class SummaryController {
     private final VideoService videoService;
     private final CreateSummaryAndQuizService createSummaryAndQuizService;
 
-    @GetMapping(value = "/api/summary", produces = "application/json")
-    //ApiResponse<String>
-    public ResponseEntity<ApiResponse<String>> getSummary(@RequestParam String videoId) {
-        SummaryResult summaryResult = videoService.getSummary(videoId);
-        if(summaryResult.getStatus()== SummaryStatus.NO_SUBTITLE){
-            return ApiResponse.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR,"자막 없음","");
-        }
-        if(summaryResult.getStatus()== SummaryStatus.NOT_LECTURE){
-            return ApiResponse.buildResponse(HttpStatus.BAD_REQUEST, "강의 영상 아님", "");
-        }
-        System.out.println("summary: " + summaryResult.getSummary());
-        return ApiResponse.buildResponse(HttpStatus.OK, "성공", summaryResult.getSummary());
-    }
+    // @GetMapping(value = "/api/summary", produces = "application/json")
+    // //ApiResponse<String>
+    // public ResponseEntity<ApiResponse<String>> getSummary(@RequestParam String videoId) {
+    //     SummaryResult summaryResult = videoService.getSummary(videoId);
+    //     if(summaryResult.getStatus()== SummaryStatus.NO_SUBTITLE){
+    //         return ApiResponse.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR,"자막 없음","");
+    //     }
+    //     if(summaryResult.getStatus()== SummaryStatus.NOT_LECTURE){
+    //         return ApiResponse.buildResponse(HttpStatus.BAD_REQUEST, "강의 영상 아님", "");
+    //     }
+    //     System.out.println("summary: " + summaryResult.getSummary());
+    //     return ApiResponse.buildResponse(HttpStatus.OK, "성공", summaryResult.getSummary());
+    // }
 
-    @GetMapping(value="/api/async/summary")
-    public Mono<ResponseEntity<ApiResponse<String>>> processVideo(
-            @RequestParam String videoId,
-            @RequestParam(defaultValue = "ko") String lang) {
+    @GetMapping(value="/api/summary")
+    public Mono<ResponseEntity<ApiResponse<String>>> processVideo(@RequestParam String videoId) {
 
-        log.info("Received async request to process video: {}, language: {}", videoId, lang);
+        log.info("Received async request to process video: {}", videoId);
 
         // 서비스 호출하여 요약 결과 Mono 받기
-        return createSummaryAndQuizService.initiateVideoProcessing(videoId, lang)
+        return createSummaryAndQuizService.initiateVideoProcessing(videoId, "ko")
                 .map(summaryResult -> {
                     // SummaryResult 상태에 따라 ResponseEntity<ApiResponse<String>> 생성
                     return switch (summaryResult.getStatus()) {
