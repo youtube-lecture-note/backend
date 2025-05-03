@@ -3,9 +3,11 @@ package com.example.youtube_lecture_helper.openai_api;
 import java.io.IOException;
 import java.net.CookieManager;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -15,31 +17,119 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.jsoup.Jsoup;
+import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
 
+@Component
 public class YoutubeSubtitleExtractor {
+    private static String proxyBaseUrl;
+    private static String proxySecretKey;
+    @Autowired
+    public YoutubeSubtitleExtractor(Environment env) {
+        proxyBaseUrl = env.getProperty("proxy.server.addr");
+        proxySecretKey = env.getProperty("proxy.secret.key");
+    }
 
     private static final HttpClient client = HttpClient.newHttpClient();
 
     //소수점 버리고 정수부분만 저장(토큰 아끼기)+toString에서 metadata 제거: 토큰 사용 2400=>1900=>hh:mm:ss 사용으로 2300으로 증가.
     //hh:mm:ss 포맷 사용 안하면 퀴즈에 timestamp가 제대로 안나온다.
 
-    private static String fetchData2(String url) throws IOException, InterruptedException {
+    private static String fetchData2(String urlString) throws IOException, InterruptedException {
+        System.out.println("DEBUG: Fetching URL: " + urlString); // Log the URL
+
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(url))
+                .uri(URI.create(urlString))
                 .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                 .header("Accept-Language", "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7")
                 .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
                 .GET()
                 .build();
 
+        // You can reuse a client, but creating a new one is fine too.
         HttpClient client = HttpClient.newBuilder()
                 .followRedirects(HttpClient.Redirect.NORMAL)
-                .cookieHandler(new CookieManager())
+                .cookieHandler(new CookieManager()) // Helps manage cookies if needed for subsequent requests or sessions
                 .build();
 
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> response;
+        try {
+            response = client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)); // Specify UTF-8
+        } catch (IOException | InterruptedException e) {
+            System.err.println("ERROR: Failed to send request or interrupted for URL: " + urlString);
+            e.printStackTrace(); // Print stack trace for detailed error
+            throw e; // Re-throw the exception
+        }
 
-        return response.body();
+        int statusCode = response.statusCode();
+        System.out.println("DEBUG: Received HTTP Status Code: " + statusCode + " for URL: " + urlString); // Log status code
+
+        String responseBody = response.body();
+
+        if (statusCode != 200) {
+            System.err.println("ERROR: Received non-200 status code (" + statusCode + ") for URL: " + urlString);
+            // Log the first part of the response body for clues (e.g., error message, CAPTCHA page)
+            System.err.println("ERROR: Response Body Snippet: " +
+                               (responseBody != null && responseBody.length() > 500 ? responseBody.substring(0, 500) : responseBody));
+             // You might want to throw an exception here instead of returning the error page body
+             // throw new IOException("HTTP request failed with status code: " + statusCode);
+             // Or return an empty string/null if your calling code handles it, but throwing is often clearer
+             return ""; // Returning empty string will likely cause the "Could not find captions" error later
+        }
+
+        // Optionally log a snippet of the successful response body for comparison
+        // System.out.println("DEBUG: Response Body Snippet (Success): " +
+        //                    (responseBody != null && responseBody.length() > 200 ? responseBody.substring(0, 200) : responseBody));
+
+        return responseBody;
+    }
+
+    private static final HttpClient client2 = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.NORMAL)
+            .cookieHandler(new CookieManager())
+            .build();
+
+    // private static final String PROXY_BASE_URL = System.getenv("PROXY_SERVER_ADDR");
+    // private static final String PROXY_SECRET_KEY = System.getenv("PROXY_SECRET_KEY");
+
+    private static String fetchDataViaProxy(String targetUrlString) throws IOException, InterruptedException {
+        System.out.println("DEBUG: Target URL: " + targetUrlString);
+
+        String encodedTargetUrl = URLEncoder.encode(targetUrlString, StandardCharsets.UTF_8.name());
+        String proxyUrlString = proxyBaseUrl + encodedTargetUrl;
+
+        System.out.println("DEBUG: Fetching via Proxy URL: " + proxyUrlString);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(proxyUrlString))
+                .header("X-Proxy-Secret", proxySecretKey)
+                .GET()
+                .build();
+
+        HttpResponse<String> response;
+        try {
+            response = client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        } catch (IOException | InterruptedException e) {
+            System.err.println("ERROR: Failed to send request to proxy or interrupted for target URL: " + targetUrlString);
+            e.printStackTrace();
+            throw e;
+        }
+
+        int statusCode = response.statusCode();
+        System.out.println("DEBUG: Received HTTP Status Code from Proxy: " + statusCode + " for target URL: " + targetUrlString);
+
+        String responseBody = response.body();
+
+        if (statusCode < 200 || statusCode >= 300) {
+            System.err.println("ERROR: Received non-2xx status code (" + statusCode + ") from proxy for target URL: " + targetUrlString);
+            System.err.println("ERROR: Response Body Snippet: " +
+                               (responseBody != null && responseBody.length() > 500 ? responseBody.substring(0, 500) : responseBody));
+             throw new IOException("Proxy request failed with status code: " + statusCode + " for target: " + targetUrlString);
+            // return ""; // 또는 빈 문자열 반환
+        }
+
+        return responseBody;
     }
 
     public static List<List<SubtitleLine>> getSubtitles(String videoID, String lang) throws IOException, InterruptedException {
@@ -47,7 +137,7 @@ public class YoutubeSubtitleExtractor {
             lang = "ko";
         }
 
-        String data = fetchData2("https://youtube.com/watch?v=" + videoID);
+        String data = fetchDataViaProxy("https://youtube.com/watch?v=" + videoID);
 
 
         // 캡션 트랙 데이터 확인
@@ -131,8 +221,7 @@ public class YoutubeSubtitleExtractor {
         String[] textLines = cleanedTranscript.split("</text>");
 
         int currentChunkStartTime = 0;
-        int intervalTimes = 300; //5분 단위로 끊어서 반환 리스트에 넣기
-        //마지막 자막이 7분이 넘었을 경우에 5분 단위로 끈힉,
+        int intervalTimes = 600; //10분 단위로 끊어서 반환 리스트에 넣기
         int lastTimestamp = 0;
         
         //모든 자막 먼저 얻어서 마지막 자막 시간 알아놓기
@@ -159,7 +248,7 @@ public class YoutubeSubtitleExtractor {
         }
 
         int totalDuration = lastTimestamp + 5;
-        int baseChunkSize = 300;        //기본 5분 이상
+        int baseChunkSize = 600;        //기본 10분 이상
         int minLastChunkSize = 180;     //마지막 청크 : 최소 3분 이상
         int numFullChunks = totalDuration / baseChunkSize;
         int lastChunkSize = totalDuration % baseChunkSize;
