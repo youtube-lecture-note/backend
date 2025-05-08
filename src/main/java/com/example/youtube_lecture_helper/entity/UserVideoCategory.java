@@ -24,4 +24,8 @@ public class UserVideoCategory {
 
     @Column(name = "user_video_name")
     private String userVideoName;  // 유저가 지정한 비디오 이름
+    public UserVideoCategory(){}
+    public UserVideoCategory(User user, Video video, Category category, String userVideoName){
+
+    }
 }

@@ -1,5 +1,6 @@
 package com.example.youtube_lecture_helper.repository;
 
+import com.example.youtube_lecture_helper.dto.UserVideoInfoDto;
 import com.example.youtube_lecture_helper.entity.UserVideoCategory;
 import com.example.youtube_lecture_helper.entity.UserVideoCategoryProjection;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -7,12 +8,35 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface UserVideoCategoryRepository extends JpaRepository<UserVideoCategory, Long> {
-    @Query("SELECT uvc.user.id AS userId, uvc.userVideoName AS userVideoName, c.name AS categoryName " +
+    List<UserVideoCategory> findByCategoryId(Long categoryId);
+    @Query("SELECT " +
+            "v.id as videoId, " +
+            "uvc.userVideoName as userVideoName " +
             "FROM UserVideoCategory uvc " +
-            "JOIN uvc.category c " +
-            "WHERE uvc.user.id = :userId")
-        //videoName은 user_video_name을 이용하므로 join 필요없음.
-    List<UserVideoCategoryProjection> findUserCategoryByUserId(@Param("userId") Long userId);
+            "JOIN uvc.video v " +
+            "WHERE uvc.category.id = :categoryId " +
+            "AND uvc.user.id = :userId")
+    List<UserVideoInfoDto> findVideosByCategoryIdAndUserId(Long categoryId, Long userId);
+
+    @Query("SELECT uvc FROM UserVideoCategory uvc " +
+            "WHERE uvc.user.id = :userId " +
+            "AND uvc.category.id = :categoryId " +
+            "AND uvc.video.id = :videoId")
+    Optional<UserVideoCategory> findByUserIdCategoryIdAndVideoId(Long userId, Long categoryId, Long videoId);
+
+    @Query( "SELECT uvc " +
+            "FROM UserVideoCategory uvc " +
+            "JOIN FETCH uvc.video " +
+            "WHERE uvc.category.id = :categoryId")
+    List<UserVideoCategory> findByCategoryIdWithVideo(Long categoryId);
+
+    @Query("SELECT uvc FROM UserVideoCategory uvc " +
+            "JOIN FETCH uvc.video " +
+            "WHERE uvc.category.id IN :categoryIds")
+    List<UserVideoCategory> findByCategoryIdsWithVideo(List<Long> categoryIds);
+
+    List<UserVideoCategory> findByUserIdAndCategoryId(Long userId, Long categoryId);
 }

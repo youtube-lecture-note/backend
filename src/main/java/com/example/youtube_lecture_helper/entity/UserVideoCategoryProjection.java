@@ -4,7 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 public interface UserVideoCategoryProjection {
-    Long getUserId();
-    String getUserVideoName();
+    Long getCategoryId();
+    Long getParentCategoryId();
     String getCategoryName();
 }
