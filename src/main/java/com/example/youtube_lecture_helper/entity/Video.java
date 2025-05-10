@@ -3,9 +3,11 @@ package com.example.youtube_lecture_helper.entity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
-@Getter @NoArgsConstructor
+@Getter @Setter
+@NoArgsConstructor
 public class Video {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

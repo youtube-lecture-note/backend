@@ -5,16 +5,15 @@ import com.example.youtube_lecture_helper.entity.Quiz;
 import okhttp3.*;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
+import java.util.regex.*;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
-
+import org.springframework.scheduling.annotation.EnableAsync;
 
 //영상 5분당 요청 1번 보내기=>비동기 처리
 @Component
@@ -35,83 +34,6 @@ public class OpenAIGptClient {
         this.quizModel = "gpt-4o-2024-08-06";
     }
 
-    public CompletableFuture<List<Quiz>> sendSummariesAndGetQuizzesAsync(String videoId, String summary) {
-        List<String> summaries = LectureSummarySplitter.splitLectureSummary(summary);
-        int i =0;
-        for(String sm: summaries){
-            System.out.println("chunck " + i++  + "번째: " + sm.length());
-        }
-//
-        List<CompletableFuture<List<Quiz>>> futures = new ArrayList<>();
-
-        for (String sm : summaries) {
-            futures.add(sendSummaryAndGetQuizAsync(videoId, sm));
-        }
-
-        // Combine all futures to a list of QuizQuestions
-        return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
-                .thenApply(v -> {
-                    List<Quiz> quizQuestions = new ArrayList<>();
-                    for (CompletableFuture<List<Quiz>> future : futures) {
-                        try {
-                            quizQuestions.addAll(future.get());
-                        } catch (InterruptedException | ExecutionException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                    return quizQuestions;
-                });
-    }
-    private CompletableFuture<List<Quiz>> sendSummaryAndGetQuizAsync(String videoId, String summary) {
-
-        JSONObject requestBody = new JSONObject();
-        requestBody.put("model", quizModel);
-        requestBody.put("messages", new JSONArray()
-                .put(new JSONObject().put("role", "system").put("content", "You are an educational quiz generator who communicates in Korean. " +
-                        "Create quizzes question strictly based on the information provided in lecutre summaries. " +
-                        "Focus on the key points and important ideas. Avoid questions about trivial or overly detailed information. " +
-                        "Do not use any external knowledge or assumptions beyond what is explicitly stated in the input content. " +
-                        "Each question must be directly answerable from the lecture content providedEach question must be based on the lecture content and logically inferable from the provided information, ensuring it aligns with the main themes and concepts discussed. " +
-                        "Provide four answer choices, including one correct answer and three plausible but incorrect options. " +
-                        "The question should test conceptual understanding rather than just memorization. "+
-                        "And give timestamps corresponding to each question" +
-                        "Generate a quiz in the following format without numbering:\n" +
-                        "[Question];[1. Option 1];[2. Option 2];[3. Option 3];[4. Option 4];[Answer Option Number];[Explanation of the correct answer];[timestamp]\n" +
-                        "Example: " + "What does a molecular formula represent?;It represents the properties of an atom.;It represents the types and numbers of atoms in a molecule.;It represents the state of a substance.;It represents the result of a chemical reaction.;2;10  \n" + "What does a cation mean?;It is an ion that loses electrons and carries a positive charge.;It is an ion that gains electrons and carries a negative charge.;It has an equal number of electrons and protons.;It is an ion without electrons.;A;250  "
-                ))
-                .put(new JSONObject().put("role", "user").put("content", summary))
-        );
-        requestBody.put("temperature", 0.5);
-
-        // HTTP 요청 생성
-        Request request = new Request.Builder()
-                .url(API_URL)
-                .post(RequestBody.create(requestBody.toString(), MediaType.get("application/json; charset=utf-8")))
-                .addHeader("Authorization", "Bearer " + API_KEY)
-                .addHeader("Content-Type", "application/json")
-                .build();
-
-        // 요청 실행 및 응답 처리
-        return CompletableFuture.supplyAsync(() -> {
-            try (Response response = client.newCall(request).execute()) {
-                if (!response.isSuccessful()) {
-                    throw new IOException("Error: " + response.code() + " - " + response.message());
-                }
-
-                // JSON 응답에서 메시지 추출
-                JSONObject responseBody = new JSONObject(response.body().string());
-                String content = responseBody.getJSONArray("choices")
-                        .getJSONObject(0)
-                        .getJSONObject("message")
-                        .getString("content");
-                return parseQuizResponse(videoId, content);
-            } catch (IOException e) {
-                e.printStackTrace();
-                return null; // Handle error scenario
-            }
-        },executor);
-    }
-
     private List<Quiz> parseQuizResponse(String videoId, String responseContent) {
         String[] quizLines = responseContent.split("\n");
         List<Quiz> quizzes = new ArrayList<>();
@@ -127,7 +49,14 @@ public class OpenAIGptClient {
                         .map(option -> option.replaceFirst("^\\d+\\.\\s*", "")) // "1. " 제거
                         .toList();
                 // 각 문제에 대해 Quiz 객체 생성
-                quizzes.add(new Quiz(videoId, quizElement[0].trim(), optionsList, quizElement[5].trim(), quizElement[6].trim(), Integer.parseInt(quizElement[7].trim())));
+                quizzes.add(new Quiz(
+                        videoId,
+                        (byte) 2,  //difficulty: 나중에 추가해야됨
+                        quizElement[0].trim(),
+                        optionsList,
+                        quizElement[5].trim(),
+                        quizElement[6].trim(),
+                        Integer.parseInt(quizElement[7].trim())));
 //                System.out.println("Print: " + quizElement[0].trim() + optionsList + quizElement[5].trim() + Integer.parseInt(quizElement[6].trim()));
             }catch(Exception e){
                 //파싱 실패할 경우 처리해야 함
@@ -135,36 +64,38 @@ public class OpenAIGptClient {
                 e.printStackTrace(); 
             }
         }
-
         return quizzes;
     }
 
     private static class LectureSummarySplitter {
-        private static final int CHUNK_SIZE = 3000; // maximum byte size per chunk
-        private static final int MIN_LAST_CHUNK_SIZE = 1500; // minimum size for last chunk
 
-        // Method to split the lecture notes into chunks of 3000 bytes
+        // 10분(600초) 단위로 청크를 나눔
         public static List<String> splitLectureSummary(String lectureSummary) {
             List<String> chunks = new ArrayList<>();
-            int length = lectureSummary.length();
-            int start = 0;
+            if (lectureSummary == null || lectureSummary.isBlank()) return chunks;
 
-            // Loop to split the lectureSummary into chunks
-            while (start < length) {
-                int end = Math.min(start + CHUNK_SIZE, length);
-                chunks.add(lectureSummary.substring(start, end));
-                start = end;
-            }
+            // 항목별 분리: <로 시작하는 항목
+            String[] items = lectureSummary.split("(?=<)");
+            // 정규표현식으로 time 추출
+            Pattern pattern = Pattern.compile("^<([0-9]+);");
 
-            // If the last chunk is too small, merge it with the previous chunk
-            if (chunks.size() > 1) {
-                String lastChunk = chunks.get(chunks.size() - 1);
-                if (lastChunk.length() <= MIN_LAST_CHUNK_SIZE) {
-                    chunks.set(chunks.size() - 2, chunks.get(chunks.size() - 2) + lastChunk);
-                    chunks.remove(chunks.size() - 1);
+            // Map<청크번호, StringBuilder>
+            Map<Integer, StringBuilder> chunkMap = new TreeMap<>();
+
+            for (String item : items) {
+                if (item.isBlank()) continue;
+                Matcher matcher = pattern.matcher(item.trim());
+                if (matcher.find()) {
+                    int timeSec = Integer.parseInt(matcher.group(1));
+                    int chunkIndex = timeSec / 600; // 10분 단위
+                    chunkMap.computeIfAbsent(chunkIndex, k -> new StringBuilder()).append(item);
                 }
             }
 
+            // Map의 value를 순서대로 List로 변환
+            for (StringBuilder sb : chunkMap.values()) {
+                chunks.add(sb.toString());
+            }
             return chunks;
         }
     }
@@ -330,12 +261,19 @@ public class OpenAIGptClient {
         } else if (type == QuizType.SHORT_ANSWER) {
             return "You are an educational quiz generator who communicates in Korean. " +
                     "Generate short answer questions from the following lecture summary. " +
+                    "Generate only as many questions as are necessary to cover the key conceptual points in the lecture summary." +
                     "Focus on the key points and important ideas. Avoid questions about trivial or overly detailed information. " +
                     "The question should test conceptual understanding rather than just memorization. "+
+                    "Avoid trivial or overly detailed fact‑recall questions. " +
                     "Each question must be based on the lecture content and logically inferable from the provided information, ensuring it aligns with the main themes and concepts discussed. " +
                     "Each question should test understanding of key concepts. Provide the correct answer and timestamp corresponding to each question. " +
                     "Format:\nQuestion;Correct Answer;Explanation of the correct answer;Timestamp as second\n" +
-                    "Example: What is the main function of red blood cells?;To carry oxygen throughout the body.;Red blood cells contain hemoglobin, which binds to oxygen in the lungs and transports it to tissues throughout the body.;240\n";
+                    "Example: What is the main function of red blood cells?;To carry oxygen throughout the body.;Red blood cells contain hemoglobin, which binds to oxygen in the lungs and transports it to tissues throughout the body.;240\n" +
+                    "Examples for good and bad questions ** (for reference only—do **not** copy these):  " +
+                    "- **Bad (rote recall)**:  \n" +
+                    "  “막스 보른은 슈레딩거 방정식에서 어떤 기여를 했는가?;파동 함수의 절댓값 제곱을 확률 해석에 도입했다.;…;1802”  \n" +
+                    "- **Good (analysis)**:  \n" +
+                    "  “파동함수의 절댓값 제곱이 물리적으로 어떤 의미를 가지며, 이를 통해 얻을 수 있는 예측은 무엇인가?;입자의 위치 확률 분포를 나타내며, 특정 구간에 존재할 확률을 계산할 수 있다.;…;1802”" ;
         }
         return "";
     }
@@ -393,6 +331,7 @@ public class OpenAIGptClient {
 
                 quizzes.add(new Quiz(
                         videoId,
+                        (byte) 2,   //난이도 이후에 추가해야됨
                         parts[0].trim(), // question
                         null,            // options (null for short-answer)
                         parts[1].trim(), // correctAnswer
@@ -421,6 +360,7 @@ public class OpenAIGptClient {
         if (result.equals("1")) return true;
         else return false;
     }
+
     private String ask(String userPrompt, String model) {
         JSONObject requestBody = new JSONObject();
         requestBody.put("model", model);
