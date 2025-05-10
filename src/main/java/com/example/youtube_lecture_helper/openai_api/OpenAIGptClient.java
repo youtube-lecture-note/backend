@@ -24,14 +24,16 @@ public class OpenAIGptClient {
     private final ExecutorService executor;
     private String summaryModel;
     private String quizModel;
+    private final YoutubeSubtitleExtractor youtubeSubtitleExtractor;
 
-    public OpenAIGptClient(){
+    public OpenAIGptClient(YoutubeSubtitleExtractor youtubeSubtitleExtractor){
         this.client = new OkHttpClient.Builder()
                 .readTimeout(120, TimeUnit.SECONDS)
                 .build();
         this.executor = Executors.newFixedThreadPool(8);
         this.summaryModel = "gpt-4o-mini";
         this.quizModel = "gpt-4o-2024-08-06";
+        this.youtubeSubtitleExtractor = youtubeSubtitleExtractor;
     }
 
     private List<Quiz> parseQuizResponse(String videoId, String responseContent) {
@@ -109,7 +111,7 @@ public class OpenAIGptClient {
     public CompletableFuture<SummaryResult> getVideoSummaryAsync(String videoId, String language) {
         return CompletableFuture.supplyAsync(() -> {
             try{
-                List<List<SubtitleLine>> subtitleChunks = YoutubeSubtitleExtractor.getSubtitles(videoId, language);
+                List<List<SubtitleLine>> subtitleChunks = youtubeSubtitleExtractor.getSubtitles(videoId, language);
                 System.out.println("subtitle check complete");
                 return processSubtitleChunks(subtitleChunks);
             }catch(Exception e){
