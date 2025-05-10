@@ -9,18 +9,19 @@ import java.util.List;
 
 @Getter
 @Setter
-public class CategoryDto {
+public class CategoryResponseDto {
     private Long id;
     private String name;
     private Long parentId;
-    private List<CategoryDto> children;
+    private List<CategoryResponseDto> children;
     private List<UserVideoInfoDto> videos;
 
-    public CategoryDto(Category category) {
+    public CategoryResponseDto(Category category) {
         this.id = category.getId();
         this.name = category.getName();
         this.parentId = category.getParentId() != null ? category.getParentId().getId() : null;
         this.children = new ArrayList<>();
         this.videos = new ArrayList<>();
     }
+    public CategoryResponseDto(){}
 }

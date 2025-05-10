@@ -1,6 +1,6 @@
 package com.example.youtube_lecture_helper.service;
 
-import com.example.youtube_lecture_helper.dto.CategoryDto;
+import com.example.youtube_lecture_helper.dto.CategoryResponseDto;
 import com.example.youtube_lecture_helper.dto.UserVideoInfoDto;
 import com.example.youtube_lecture_helper.entity.Category;
 import com.example.youtube_lecture_helper.entity.User;
@@ -25,14 +25,14 @@ public class CategoryService {
     private final VideoRepository videoRepository;
     private final UserRepository userRepository;
 
-    public List<CategoryDto> getAllCategoryHierarchyWithVideos(Long userId) {
+    public List<CategoryResponseDto> getAllCategoryHierarchyWithVideos(Long userId) {
         // 루트 카테고리만 먼저 조회
         List<Category> rootCategories = categoryRepository.findByParentIdIsNull();
 
         // 모든 카테고리들의 계층 구조를 만들기
-        List<CategoryDto> result = new ArrayList<>();
+        List<CategoryResponseDto> result = new ArrayList<>();
         for (Category rootCategory : rootCategories) {
-            CategoryDto rootDto = buildCategoryHierarchy(rootCategory);
+            CategoryResponseDto rootDto = buildCategoryHierarchy(rootCategory);
             // 해당 유저의 카테고리인 경우만 추가
             if (rootCategory.getUser() == null || rootCategory.getUser().getId().equals(userId)) {
                 result.add(rootDto);
@@ -58,8 +58,8 @@ public class CategoryService {
     /**
      * 특정 카테고리와 그 하위 카테고리의 계층 구조를 재귀적으로 구성
      */
-    private CategoryDto buildCategoryHierarchy(Category category) {
-        CategoryDto dto = new CategoryDto(category);
+    private CategoryResponseDto buildCategoryHierarchy(Category category) {
+        CategoryResponseDto dto = new CategoryResponseDto(category);
 
         List<Category> childCategories = categoryRepository.findByParentId(category);
         for (Category child : childCategories) {
@@ -72,9 +72,9 @@ public class CategoryService {
     /**
      * 모든 카테고리 ID를 추출하는 헬퍼 메서드
      */
-    private List<Long> getAllCategoryIds(List<CategoryDto> categories) {
+    private List<Long> getAllCategoryIds(List<CategoryResponseDto> categories) {
         List<Long> result = new ArrayList<>();
-        for (CategoryDto category : categories) {
+        for (CategoryResponseDto category : categories) {
             result.add(category.getId());
             result.addAll(getAllCategoryIds(category.getChildren()));
         }
@@ -84,9 +84,9 @@ public class CategoryService {
     /**
      * 비디오 정보를 카테고리 DTO에 매핑하는 헬퍼 메서드
      */
-    private void mapVideosToCategories(List<CategoryDto> categories, List<UserVideoCategory> videos, Long userId) {
+    private void mapVideosToCategories(List<CategoryResponseDto> categories, List<UserVideoCategory> videos, Long userId) {
         // 카테고리 ID -> 카테고리 DTO 매핑을 위한 맵 생성
-        Map<Long, CategoryDto> categoryMap = new HashMap<>();
+        Map<Long, CategoryResponseDto> categoryMap = new HashMap<>();
         buildCategoryMap(categories, categoryMap);
 
         // 비디오를 해당 카테고리에 할당
@@ -94,9 +94,9 @@ public class CategoryService {
             // 해당 유저의 비디오만 추가
             if (video.getUser().getId().equals(userId)) {
                 Long categoryId = video.getCategory().getId();
-                CategoryDto categoryDto = categoryMap.get(categoryId);
-                if (categoryDto != null) {
-                    categoryDto.getVideos().add(new UserVideoInfoDto(video));
+                CategoryResponseDto categoryResponseDto = categoryMap.get(categoryId);
+                if (categoryResponseDto != null) {
+                    categoryResponseDto.getVideos().add(new UserVideoInfoDto(video));
                 }
             }
         }
@@ -105,8 +105,8 @@ public class CategoryService {
     /**
      * 카테고리 ID -> DTO 매핑을 위한 헬퍼 메서드
      */
-    private void buildCategoryMap(List<CategoryDto> categories, Map<Long, CategoryDto> categoryMap) {
-        for (CategoryDto category : categories) {
+    private void buildCategoryMap(List<CategoryResponseDto> categories, Map<Long, CategoryResponseDto> categoryMap) {
+        for (CategoryResponseDto category : categories) {
             categoryMap.put(category.getId(), category);
             buildCategoryMap(category.getChildren(), categoryMap);
         }
@@ -118,7 +118,7 @@ public class CategoryService {
     /**
      * 특정 카테고리의 비디오만 조회
      */
-    public CategoryDto getCategoryWithVideos(Long categoryId, Long userId) {
+    public CategoryResponseDto getCategoryWithVideos(Long categoryId, Long userId) {
         Category category = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new EntityNotFoundException("카테고리를 찾을 수 없습니다: " + categoryId));
 
@@ -127,12 +127,12 @@ public class CategoryService {
             throw new AccessDeniedException("해당 카테고리에 접근할 권한이 없습니다.");
         }
 
-        CategoryDto dto = new CategoryDto(category);
+        CategoryResponseDto dto = new CategoryResponseDto(category);
 
         // 하위 카테고리 구성 - ID만 사용하는 쿼리로 최적화
         List<Category> childCategories = categoryRepository.findByParentId(category);
         for (Category child : childCategories) {
-            dto.getChildren().add(new CategoryDto(child));
+            dto.getChildren().add(new CategoryResponseDto(child));
         }
 
         // 비디오 정보 추가 - 필요한 필드만 포함하는 쿼리 사용
@@ -146,7 +146,23 @@ public class CategoryService {
 
         return dto;
     }
+    /**
+     * 카테고리 추가
+     */
+    public CategoryResponseDto createCategory(String name, Long parentId, Long userId){
+        User user = new User(userId);
+        Category category = new Category();
+        category.setName(name);
+        category.setUser(user);
 
+        if (parentId != null) {
+            Category parent = categoryRepository.findById(parentId)
+                    .orElseThrow(() -> new IllegalArgumentException("Parent category not found: " + parentId));
+            category.setParentId(parent);
+        }
+
+        return new CategoryResponseDto(categoryRepository.save(category));
+    }
     /**
      * 카테고리에 비디오 추가
      */
