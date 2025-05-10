@@ -166,10 +166,12 @@ public class CategoryService {
     /**
      * 카테고리에 비디오 추가
      */
-    public void addVideoToCategory(Long userId, Long videoId, Long categoryId, String userVideoName) {
+    public void addVideoToCategory(Long userId, String youtubeId, Long categoryId, String userVideoName) {
+        Video video = videoRepository.findByYoutubeId(youtubeId)
+                .orElseThrow(() -> new EntityNotFoundException("해당 유튜브 ID의 비디오를 찾을 수 없습니다: " + youtubeId));
         // 엔티티 로드를 최소화
         Optional<UserVideoCategory> existingEntry = userVideoCategoryRepository
-                .findByUserIdCategoryIdAndVideoId(userId, categoryId, videoId);
+                .findByUserIdCategoryIdAndVideoId(userId, categoryId, video.getId());
 
         if (existingEntry.isPresent()) {
             throw new IllegalStateException("이미 해당 비디오가 카테고리에 존재합니다.");
@@ -186,9 +188,6 @@ public class CategoryService {
         User user = new User();
         user.setId(userId);
 
-        Video video = new Video();
-        video.setId(videoId);
-
         // 필요한 엔티티 참조만 설정
         UserVideoCategory userVideoCategory = new UserVideoCategory(
                 user,video,category,userVideoName
@@ -199,9 +198,12 @@ public class CategoryService {
     /**
      * 카테고리에서 비디오 제거
      */
-    public void removeVideoFromCategory(Long userId, Long videoId, Long categoryId) {
+    public void removeVideoFromCategory(Long userId, String youtubeId, Long categoryId) {
+        Video video = videoRepository.findByYoutubeId(youtubeId)
+                .orElseThrow(() -> new EntityNotFoundException("해당 유튜브 ID의 비디오를 찾을 수 없습니다: " + youtubeId));
+
         Optional<UserVideoCategory> entryToRemove = userVideoCategoryRepository
-                .findByUserIdCategoryIdAndVideoId(userId, categoryId, videoId);
+                .findByUserIdCategoryIdAndVideoId(userId, categoryId, video.getId());
 
         if (entryToRemove.isEmpty()) {
             throw new EntityNotFoundException("해당 카테고리에 비디오가 존재하지 않습니다.");

@@ -83,7 +83,7 @@ public class CategoryController {
     @PostMapping("/{categoryId}/videos/{videoId}")
     public ResponseEntity<Void> addVideoToCategory(
             @PathVariable Long categoryId,
-            @PathVariable Long videoId,
+            @PathVariable String videoId,
             @RequestParam(required = false) String userVideoName,
             @AuthenticationPrincipal UserDetails userDetails) {
         Long userId = ((CustomUserDetails) userDetails).getId();
@@ -106,7 +106,7 @@ public class CategoryController {
     @DeleteMapping("/{categoryId}/videos/{videoId}")
     public ResponseEntity<Void> removeVideoFromCategory(
             @PathVariable Long categoryId,
-            @PathVariable Long videoId,
+            @PathVariable String videoId,
             @AuthenticationPrincipal UserDetails userDetails) {
         Long userId = ((CustomUserDetails) userDetails).getId();
         categoryService.removeVideoFromCategory(userId, videoId, categoryId);
@@ -115,7 +115,7 @@ public class CategoryController {
     @DeleteMapping("/{categoryId}/videos/{videoId}/test")
     public ResponseEntity<Void> removeVideoFromCategoryTest(
             @PathVariable Long categoryId,
-            @PathVariable Long videoId) {
+            @PathVariable String videoId) {
         Long userId = 1L;
         categoryService.removeVideoFromCategory(userId, videoId, categoryId);
         return ResponseEntity.noContent().build();
