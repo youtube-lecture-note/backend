@@ -32,13 +32,16 @@ public class ReactiveGptClient {
     private static final String API_KEY = System.getenv("OPENAI_API_KEY");
     private static final String quizModel = "gpt-4o-2024-08-06";
     private static final String summaryModel = "gpt-4o-mini";
+    private final YoutubeSubtitleExtractor youtubeSubtitleExtractor;
 
-    public ReactiveGptClient() {
+
+    public ReactiveGptClient(YoutubeSubtitleExtractor youtubeSubtitleExtractor) {
         this.webClient = WebClient.builder()
                 .baseUrl(API_URL)
                 .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + API_KEY)
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .build();
+        this.youtubeSubtitleExtractor = youtubeSubtitleExtractor;
     }
 
     public Mono<Boolean> isCorrectSubjectiveAnswer(String question, String correctAnswer, String userAnswer) {
@@ -197,7 +200,7 @@ public class ReactiveGptClient {
     public Mono<SummaryResult> getVideoSummaryReactive(String videoId, String language) {
         // Step 1: Get subtitles. Assume getSubtitles might be blocking.
         // Use Mono.fromCallable and subscribeOn to run it on a suitable scheduler.
-        return Mono.fromCallable(() -> YoutubeSubtitleExtractor.getSubtitles(videoId, language))
+        return Mono.fromCallable(() -> youtubeSubtitleExtractor.getSubtitles(videoId, language))
                 .subscribeOn(Schedulers.boundedElastic()) // Schedule blocking call off the event loop
                 .doOnSubscribe(s -> log.info("Starting subtitle extraction for videoId: {}", videoId))
                 .doOnError(e -> log.error("Failed to get subtitles for videoId: {}", videoId, e))

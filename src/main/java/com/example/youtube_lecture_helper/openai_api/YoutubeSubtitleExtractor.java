@@ -17,19 +17,24 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.jsoup.Jsoup;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 
 @Component
 public class YoutubeSubtitleExtractor {
-    private static String proxyBaseUrl;
-    private static String proxySecretKey;
-    @Autowired
-    public YoutubeSubtitleExtractor(Environment env) {
-        proxyBaseUrl = env.getProperty("proxy.server.addr");
-        proxySecretKey = env.getProperty("proxy.secret.key");
-    }
+    @Value("${proxy.server.addr}")
+    private String proxyBaseUrl;
+    @Value("${proxy.secret.key}")
+    private String proxySecretKey;
+//    private static String proxyBaseUrl;
+//    private static String proxySecretKey;
+//    @Autowired
+//    public YoutubeSubtitleExtractor(Environment env) {
+//        proxyBaseUrl = env.getProperty("proxy.server.addr");
+//        proxySecretKey = env.getProperty("proxy.secret.key");
+//    }
 
     private static final HttpClient client = HttpClient.newHttpClient();
 
@@ -93,7 +98,7 @@ public class YoutubeSubtitleExtractor {
     // private static final String PROXY_BASE_URL = System.getenv("PROXY_SERVER_ADDR");
     // private static final String PROXY_SECRET_KEY = System.getenv("PROXY_SECRET_KEY");
 
-    private static String fetchDataViaProxy(String targetUrlString) throws IOException, InterruptedException {
+    private String fetchDataViaProxy(String targetUrlString) throws IOException, InterruptedException {
         System.out.println("DEBUG: Target URL: " + targetUrlString);
 
         String encodedTargetUrl = URLEncoder.encode(targetUrlString, StandardCharsets.UTF_8.name());
@@ -132,7 +137,7 @@ public class YoutubeSubtitleExtractor {
         return responseBody;
     }
 
-    public static List<List<SubtitleLine>> getSubtitles(String videoID, String lang) throws IOException, InterruptedException {
+    public List<List<SubtitleLine>> getSubtitles(String videoID, String lang) throws IOException, InterruptedException {
         if (lang == null) {
             lang = "ko";
         }
@@ -154,6 +159,7 @@ public class YoutubeSubtitleExtractor {
         }
 
         String match = matcher.group(1);
+        System.out.println(match);
 
         try {
             JSONArray captionTracks = new JSONArray(match);
