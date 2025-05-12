@@ -13,6 +13,6 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User,Long> {
     Optional<User> findByEmail(String email);
 
-    @Query("select new com.example.youtube_lecture_helper.security.CustomUserDetails(u.id, u.email) from User u where u.email = :email")
+    @Query("select new com.example.youtube_lecture_helper.security.CustomUserDetails(u.id, u.email, u.role) from User u where u.email = :email")
     Optional<CustomUserDetails> findUserDetailsByEmail(@Param("email") String email);
 }

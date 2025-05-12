@@ -12,9 +12,10 @@ public class CustomUserDetails implements UserDetails {
     private String email; // 혹은 email
     private String password; // JWT 방식에서는 사용하지 않을 수 있음
     private Collection<? extends GrantedAuthority> authorities;
-    public CustomUserDetails(Long id, String email){
+    public CustomUserDetails(Long id, String email, String role){
         this.id = id;
         this.email = email;
+        this.authorities = Collections.singletonList(() -> role);
     }
 
     // 생성자, getter 등

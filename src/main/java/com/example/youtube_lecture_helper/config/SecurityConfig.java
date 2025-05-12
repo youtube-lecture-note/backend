@@ -57,7 +57,7 @@ public class SecurityConfig {
         //         "http://localhost:3000",
         //         "https://example.com"
         // ));
-        configuration.setAllowedOrigins(Arrays.asList("*"));
+        configuration.setAllowedOrigins(Arrays.asList("https://cpyt.sytes.net"));
 
         // 허용할 HTTP 메서드 설정
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
@@ -69,7 +69,7 @@ public class SecurityConfig {
         configuration.setExposedHeaders(Arrays.asList("Authorization"));
 
         // 자격 증명(쿠키 등) 허용
-        //configuration.setAllowCredentials(true);
+        configuration.setAllowCredentials(true);
 
         // Max Age 설정 (초 단위)
         configuration.setMaxAge(3600L);
