@@ -13,7 +13,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class CopyrightController {
 
-    private CopyrightService copyrightService;
+    private final CopyrightService copyrightService;
 
     @GetMapping("/api/copyright/check/{videoId}")
     public ResponseEntity<ApiResponse<CopyrightCheckDTO>> check(
