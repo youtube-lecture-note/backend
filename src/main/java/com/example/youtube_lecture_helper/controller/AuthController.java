@@ -4,6 +4,7 @@ import com.example.youtube_lecture_helper.security.CustomUserDetails;
 import com.example.youtube_lecture_helper.security.JwtTokenProvider;
 import com.example.youtube_lecture_helper.service.UserService;
 import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,6 +24,8 @@ import com.google.api.client.json.gson.GsonFactory;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.Arrays;
+import java.util.Optional;
 
 
 @RestController
@@ -61,15 +64,6 @@ public class AuthController {
 
             // DB에서 사용자 조회 또는 신규 생성
             CustomUserDetails userDetails = userService.loadUserByUsername(email); // 또는 findByGoogleId
-            if (userDetails == null) {
-                // 신규 사용자 생성 로직 (이름, 권한 등 설정)
-                List<GrantedAuthority> authorities = Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER"));
-                Long newUserId = System.currentTimeMillis() % 100000; // 임시 ID
-                userDetails = new CustomUserDetails(newUserId, email, "", authorities);
-                userService.createUser(userDetails); // DB에 사용자 저장
-            }
-
-
             // JWT 생성
             String jwt = tokenProvider.generateTokenFromUserId(userDetails.getId(), userDetails.getUsername(), userDetails.getAuthorities());
 
@@ -82,6 +76,39 @@ public class AuthController {
         } catch (Exception e) {
             // logger.error("Google Sign-In error", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Login failed: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/check")
+    public ResponseEntity<?> checkAuthentication(HttpServletRequest request) {
+        try {
+            // 쿠키에서 JWT 토큰 추출
+            Cookie[] cookies = request.getCookies();
+            if (cookies == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            }
+            System.out.println("Hello World!");
+            Optional<Cookie> jwtCookie = Arrays.stream(cookies)
+                    .filter(cookie -> "accessToken".equals(cookie.getName()))
+                    .findFirst();
+            System.out.println("Hello World2!");
+            if (jwtCookie.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            }
+
+            String token = jwtCookie.get().getValue();
+            System.out.println(token);
+
+            // 토큰 검증
+            if (!tokenProvider.validateToken(token)) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            }
+
+            // 인증 성공 시 200 상태 코드만 반환
+            return ResponseEntity.ok().build();
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
