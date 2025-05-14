@@ -57,7 +57,10 @@ public class SecurityConfig {
         //         "http://localhost:3000",
         //         "https://example.com"
         // ));
-        configuration.setAllowedOrigins(Arrays.asList("https://cpyt.sytes.net"));
+        configuration.setAllowedOrigins(Arrays.asList(
+            "https://cpyt.sytes.net",
+            "http://localhost:3000"
+        ));
 
         // 허용할 HTTP 메서드 설정
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
