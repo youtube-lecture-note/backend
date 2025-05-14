@@ -1,10 +1,10 @@
 package com.example.youtube_lecture_helper.controller;
 
 import com.example.youtube_lecture_helper.dto.QuizAttemptDto;
+import com.example.youtube_lecture_helper.dto.QuizAttemptWithAnswerDto;
 import com.example.youtube_lecture_helper.dto.UserQuizAnswerDto;
-import com.example.youtube_lecture_helper.entity.QuizAttempt;
-import com.example.youtube_lecture_helper.entity.Quiz;
-import com.example.youtube_lecture_helper.repository.QuizRepository;
+import com.example.youtube_lecture_helper.repository.QuizAttemptProjection;
+import com.example.youtube_lecture_helper.security.CustomUserDetails;
 import com.example.youtube_lecture_helper.service.QuizAttemptService;
 import com.example.youtube_lecture_helper.service.QuizService;
 import com.example.youtube_lecture_helper.exception.QuizNotFoundException;
@@ -12,6 +12,8 @@ import com.example.youtube_lecture_helper.exception.QuizNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
@@ -24,51 +26,25 @@ public class QuizController {
     private final QuizService quizService;
     private final QuizAttemptService quizAttemptService;
 
-    // @GetMapping("/api/quizzes")
-    // public ResponseEntity<ApiResponse<List<Quiz>>> getAllQuizzes(@RequestParam String videoId){
-    //     List<Quiz> quizzes = quizService.getQuizzes(videoId);
-    //     if(quizzes.size()>0) {
-    //         return ApiResponse.buildResponse(HttpStatus.OK, "success", quizzes);
-    //     }else return ApiResponse.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "NO QUIZ GENERATED", null);
-    // }
-
     @GetMapping("/api/quizzes")
     public ResponseEntity<ApiResponse<QuizService.CreatedQuizSetDTO>> getQuizzesWithDifficultyAndCount(
             @RequestParam String videoId,
             @RequestParam int difficulty,
-            @RequestParam int count
+            @RequestParam int count,
+            @AuthenticationPrincipal UserDetails userDetails
     ){
+        Long userId = ((CustomUserDetails) userDetails).getId();
         QuizService.CreatedQuizSetDTO quizzes = quizService.createQuizSetForUser(
-                (long)1,difficulty,videoId,count
+                userId,difficulty,videoId,count
         );
         return ApiResponse.buildResponse(HttpStatus.OK,"success",quizzes);
     }
 
-    //front에서는 userId=0으로 설정하고 전송.
-    // UserQuizAnswerDto
-    // private long userId;
-    // private long quizId;
-    // private boolean isShortQuiz;
-    // private String userAnswer;
-    // @PostMapping("/api/quizzes/submit")
-    // public ResponseEntity<ApiResponse<List<Long>>> submitQuizAnswers(
-    //         @RequestBody List<UserQuizAnswerDto> userQuizAnswerDtoList
-    //         //@RequestHeader("Authorization") String token //토큰 나중에 추가하기
-    // ){
-    //     //long userId = extractUserId(token)
-    //     long userId = 1;
-    //     userQuizAnswerDtoList.forEach(dto -> dto.setUserId(userId));
-    //     List<Long> incorrectQuizIds = quizService.getWrongAnswerQuizIds(userQuizAnswerDtoList);
-
-    //     return ApiResponse.buildResponse(
-    //             HttpStatus.OK, "success", incorrectQuizIds
-    //     );
-    // }
-
     @PostMapping("/api/quizzes/submit")
     public Mono<ResponseEntity<ApiResponse<List<QuizAttemptDto>>>> submitQuizAnswers(
             @RequestParam Long quizSetId,
-            @RequestBody List<UserQuizAnswerDto> answers
+            @RequestBody List<UserQuizAnswerDto> answers,
+            @AuthenticationPrincipal UserDetails userDetails
     ) {
         return quizAttemptService.processQuizAnswers(quizSetId, answers)
                 .map(result -> ApiResponse.buildResponse(
@@ -89,5 +65,30 @@ public class QuizController {
                     }
                 });
     }
+    //해당 QuizSet에 대한 모든 quiz 정보(내 답, 정답, 설명 포함)
+    @GetMapping("/api/quizzes/attempts/sets/{quizSetId}")
+    public ResponseEntity<List<QuizAttemptWithAnswerDto>> getQuizAttempts(
+            @PathVariable Long quizSetId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        Long userId = ((CustomUserDetails) userDetails).getId();
+        return ResponseEntity.ok(quizAttemptService.getQuizAttemptDetails(quizSetId,userId));
+    }
+    
+    //userId로 해당 유저의 전체 퀴즈 기록 조회
+    @GetMapping("/api/quizzes/attempts/summaries")
+    public ResponseEntity<List<QuizAttemptProjection>> getQuizAttempts(
+            @AuthenticationPrincipal UserDetails userDetails) {
+        Long userId = ((CustomUserDetails) userDetails).getId();
+        return ResponseEntity.ok(quizAttemptService.getQuizHistorySummaries(userId));
+    }
 
+    //youtubeId, videoId로 해당 유저가 해당 비디오에 푼 기록들 조회
+    @GetMapping("/api/quizzes/attempts/videos/{youtubeId}")
+    public ResponseEntity<List<QuizAttemptProjection>> getQuizAttemptsByVideoId(
+            @PathVariable String youtubeId,
+            @AuthenticationPrincipal UserDetails userDetails
+    ){
+        Long userId = ((CustomUserDetails) userDetails).getId();
+        return ResponseEntity.ok(quizAttemptService.getVideoQuizHistorySummaries(userId,youtubeId));
+    }
 }

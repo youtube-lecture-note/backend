@@ -1,6 +1,7 @@
 package com.example.youtube_lecture_helper.repository;
 
 import com.example.youtube_lecture_helper.dto.QuizAttemptDto;
+import com.example.youtube_lecture_helper.dto.QuizAttemptWithAnswerDto;
 import com.example.youtube_lecture_helper.entity.QuizAttempt;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -63,4 +64,28 @@ public interface QuizAttemptRepository  extends JpaRepository<QuizAttempt,Long> 
             "WHERE qa.quizSet.id = :quizSetId " +
             "ORDER BY qa.id ASC")
     List<QuizAttemptDto> findDetailedAttemptDTOsByQuizSetId(@Param("quizSetId") Long quizSetId);
+    @Query("SELECT new com.example.youtube_lecture_helper.dto.QuizAttemptWithAnswerDto(" +
+            "  qa.id, " +                 // attemptId
+            "  qa.userAnswer, " +         // userAnswer
+            "  qa.isCorrect, " +          // isCorrect
+            "  q.id, " +                  // quizId
+            "  q.question, " +            // question
+            "  q.youtubeId, " +           // youtubeId
+            "  qa.quizSet.id, " +         // quizSetId
+            "  q.option1, " +             // 추가 필드
+            "  q.option2, " +
+            "  q.option3, " +
+            "  q.option4, " +
+            "  q.correctAnswer, " +
+            "  q.comment, " +
+            "  q.selective, " +
+            "  q.difficulty, " +
+            "  q.timestamp " +
+            ") " +
+            "FROM QuizAttempt qa " +
+            "JOIN qa.quiz q " +
+            "WHERE qa.quizSet.id = :quizSetId " +
+            "ORDER BY qa.id ASC")
+    List<QuizAttemptWithAnswerDto> findDetailedAttemptsWithAnswersByQuizSetId(@Param("quizSetId") Long quizSetId);
+
 }
