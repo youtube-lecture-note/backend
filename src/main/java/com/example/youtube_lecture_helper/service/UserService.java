@@ -14,10 +14,11 @@ public class UserService {
         return userRepository.findUserDetailsByEmail(email)
                 .orElse(null); // null 허용, 구글 로그인 시 신규 생성 위해
     }
-    public void createUser(CustomUserDetails userDetails) {
+    //email만 참고
+    public User createUser(String email, String role) {
         User user = new User();
-        user.setEmail(userDetails.getUsername());
-        userRepository.save(user);
+        user.setEmail(email);
+        user.setRole(role);
+        return userRepository.save(user);
     }
-
 }

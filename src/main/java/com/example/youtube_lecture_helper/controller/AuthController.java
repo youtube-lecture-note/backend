@@ -19,6 +19,7 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.gson.GsonFactory;
+import com.example.youtube_lecture_helper.entity.User;
 
 
 import java.util.Collections;
@@ -64,6 +65,13 @@ public class AuthController {
 
             // DB에서 사용자 조회 또는 신규 생성
             CustomUserDetails userDetails = userService.loadUserByUsername(email); // 또는 findByGoogleId
+            if (userDetails == null) {  //기존에 없던 사용자
+                // 신규 사용자 생성 로직 (이름, 권한 등 설정)
+                // 2. DB에 저장 (자동으로 ID가 생성됨)
+                User savedUser = userService.createUser(email,"USER");
+                List<GrantedAuthority> authorities = Collections.singletonList(new SimpleGrantedAuthority(savedUser.getRole()));
+                userDetails = new CustomUserDetails(savedUser.getId(), savedUser.getEmail(), "", authorities);
+            }
             // JWT 생성
             String jwt = tokenProvider.generateTokenFromUserId(userDetails.getId(), userDetails.getUsername(), userDetails.getAuthorities());
 
