@@ -1,8 +1,6 @@
 package com.example.youtube_lecture_helper.controller;
 
-import com.example.youtube_lecture_helper.dto.QuizAttemptDto;
-import com.example.youtube_lecture_helper.dto.QuizAttemptWithAnswerDto;
-import com.example.youtube_lecture_helper.dto.UserQuizAnswerDto;
+import com.example.youtube_lecture_helper.dto.*;
 import com.example.youtube_lecture_helper.repository.QuizAttemptProjection;
 import com.example.youtube_lecture_helper.security.CustomUserDetails;
 import com.example.youtube_lecture_helper.service.QuizAttemptService;
@@ -25,6 +23,12 @@ public class QuizController {
 
     private final QuizService quizService;
     private final QuizAttemptService quizAttemptService;
+    //난이도별 퀴즈 개수 반환
+    @GetMapping("/api/quizzes/count")
+    public ResponseEntity<QuizCountDto> getQuizCount(
+            @RequestParam String videoId, @AuthenticationPrincipal UserDetails userDetails){
+        return ResponseEntity.ok(quizService.getQuizCountByYoutubeId(videoId));
+    }
 
     @GetMapping("/api/quizzes")
     public ResponseEntity<ApiResponse<QuizService.CreatedQuizSetDTO>> getQuizzesWithDifficultyAndCount(
@@ -87,8 +91,8 @@ public class QuizController {
     public ResponseEntity<List<QuizAttemptProjection>> getQuizAttemptsByVideoId(
             @PathVariable String youtubeId,
             @AuthenticationPrincipal UserDetails userDetails
-    ){
+    ) {
         Long userId = ((CustomUserDetails) userDetails).getId();
-        return ResponseEntity.ok(quizAttemptService.getVideoQuizHistorySummaries(userId,youtubeId));
+        return ResponseEntity.ok(quizAttemptService.getVideoQuizHistorySummaries(userId, youtubeId));
     }
 }

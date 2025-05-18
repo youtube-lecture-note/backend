@@ -1,5 +1,7 @@
 package com.example.youtube_lecture_helper.service;
 
+import com.example.youtube_lecture_helper.dto.QuizCountByDifficultyDto;
+import com.example.youtube_lecture_helper.dto.QuizCountDto;
 import com.example.youtube_lecture_helper.dto.UserQuizAnswerDto;
 import com.example.youtube_lecture_helper.entity.QuizAttempt;
 import com.example.youtube_lecture_helper.entity.QuizSet;
@@ -37,6 +39,18 @@ public class QuizService {
 //        this.quizRepository = quizRepository;
 //        this.quizLogService = quizLogService;
 //    }
+    public QuizCountDto getQuizCountByYoutubeId(String youtubeId){
+        List<QuizCountByDifficultyDto> quizCountByDifficultyDtos = quizRepository.countQuizzesByDifficultyAndYoutubeId(youtubeId);
+        long level1 = 0L, level2 = 0L, level3 = 0L;
+        for(QuizCountByDifficultyDto dto: quizCountByDifficultyDtos){
+            switch(dto.getDifficulty()){
+                case 1->level1 = dto.getCount();
+                case 2->level2 = dto.getCount();
+                case 3->level3 = dto.getCount();
+            }
+        }
+        return new QuizCountDto(level1,level2,level3);
+    }
 
     public List<Quiz> getQuizzes(String youtubeId){
         return quizRepository.findByYoutubeId(youtubeId);
