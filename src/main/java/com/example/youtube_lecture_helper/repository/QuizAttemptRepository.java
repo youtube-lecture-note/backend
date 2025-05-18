@@ -1,6 +1,7 @@
 package com.example.youtube_lecture_helper.repository;
 
 import com.example.youtube_lecture_helper.dto.QuizAttemptDto;
+import com.example.youtube_lecture_helper.dto.QuizHistorySummaryDto;
 import com.example.youtube_lecture_helper.dto.QuizAttemptWithAnswerDto;
 import com.example.youtube_lecture_helper.entity.QuizAttempt;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -11,16 +12,24 @@ import java.util.List;
 
 public interface QuizAttemptRepository  extends JpaRepository<QuizAttempt,Long> {
     @Query("SELECT " +
+            "  v.youtubeId AS youtubeId, " +
+            "  COALESCE(uvc.userVideoName, v.youtubeId) AS userVideoName, " +
+            "  v.id AS videoId, " +
+            "  qs.attemptTime AS date, " +
             "  qs.id AS quizSetId, " +
-            "  qs.attemptTime AS attemptTime, " +
-            "  COUNT(qa.id) AS totalAttempts, " +
-            "  SUM(CASE WHEN qa.isCorrect = false THEN 1 ELSE 0 END) AS incorrectAttempts " +
+            "  COUNT(qa.id) AS totalQuizzes, " +
+            "  SUM(CASE WHEN qa.isCorrect = false THEN 1 ELSE 0 END) AS wrongCount " +
             "FROM QuizAttempt qa " +
-            "JOIN qa.quizSet qs " + // QuizSet과 조인하여 attemptTime, user 정보 접근
+            "JOIN qa.quizSet qs " +
+            "JOIN qa.quiz q " +
+            "JOIN Video v ON q.youtubeId = v.youtubeId " +
+            "LEFT JOIN UserVideoCategory uvc ON uvc.video.id = v.id AND uvc.user.id = qs.user.id " +
             "WHERE qs.user.id = :userId " +
-            "GROUP BY qs.id, qs.attemptTime " + // QuizSet 단위로 그룹화
-            "ORDER BY qs.attemptTime DESC") // 최근 시도 순으로 정렬
-    List<QuizAttemptProjection> findQuizSetSummariesByUserId(@Param("userId") Long userId);
+            "GROUP BY v.youtubeId, uvc.userVideoName, v.id, qs.attemptTime, qs.id " +
+            "ORDER BY qs.attemptTime DESC")
+    List<QuizHistorySummaryDto> findQuizSetSummariesByUserId(@Param("userId") Long userId);
+
+
 
     /**
      * 특정 비디오(youtubeId)에 대한 사용자의 퀴즈 풀이 기록 요약을 조회 (최근 순)
@@ -30,9 +39,9 @@ public interface QuizAttemptRepository  extends JpaRepository<QuizAttempt,Long> 
     @Query("""
         SELECT
           qs.id AS quizSetId,
-          qs.attemptTime AS attemptTime,
-          COUNT(qa.id) AS totalAttempts,
-          SUM(CASE WHEN qa.isCorrect = false THEN 1 ELSE 0 END) AS incorrectAttempts
+          qs.attemptTime AS date,
+          COUNT(qa.id) AS totalQuizzes,
+          SUM(CASE WHEN qa.isCorrect = false THEN 1 ELSE 0 END) AS wrongCount 
         FROM QuizAttempt qa
         JOIN qa.quizSet qs
         JOIN qa.quiz q
@@ -41,7 +50,7 @@ public interface QuizAttemptRepository  extends JpaRepository<QuizAttempt,Long> 
         GROUP BY qs.id, qs.attemptTime
         ORDER BY qs.attemptTime DESC
     """)
-    List<QuizAttemptProjection> findQuizSetSummariesByUserIdAndYoutubeId(
+    List<QuizHistorySummaryDto> findQuizSetSummariesByUserIdAndYoutubeId(
             @Param("userId") Long userId,
             @Param("youtubeId") String youtubeId);
 

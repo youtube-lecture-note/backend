@@ -12,6 +12,7 @@ import com.example.youtube_lecture_helper.repository.CategoryRepository;
 import com.example.youtube_lecture_helper.repository.UserRepository;
 import com.example.youtube_lecture_helper.repository.UserVideoCategoryRepository;
 import com.example.youtube_lecture_helper.repository.VideoRepository;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -24,6 +25,7 @@ public class CategoryService {
     private final UserVideoCategoryRepository userVideoCategoryRepository;
     private final VideoRepository videoRepository;
     private final UserRepository userRepository;
+    public static final Long DEFAULT_CATEGORY_ID = 1L;
 
     public List<CategoryResponseDto> getAllCategoryHierarchyWithVideos(Long userId) {
         // 루트 카테고리만 먼저 조회
@@ -166,33 +168,55 @@ public class CategoryService {
     /**
      * 카테고리에 비디오 추가
      */
+    @Transactional
     public void addVideoToCategory(Long userId, String youtubeId, Long categoryId, String userVideoName) {
+        // 비디오 확인
         Video video = videoRepository.findByYoutubeId(youtubeId)
                 .orElseThrow(() -> new EntityNotFoundException("해당 유튜브 ID의 비디오를 찾을 수 없습니다: " + youtubeId));
-        // 엔티티 로드를 최소화
+        
+        //default category일 경우(카테고리 지정 안함)
+        if(categoryId != DEFAULT_CATEGORY_ID){
+            // 카테고리 접근 권한 확인
+            Long categoryOwnerId = categoryRepository.findOwnerIdById(categoryId)
+                    .orElseThrow(() -> new EntityNotFoundException("카테고리를 찾을 수 없습니다: " + categoryId));
+
+            if (categoryOwnerId != null && !categoryOwnerId.equals(userId)) {
+                throw new AccessDeniedException("해당 카테고리에 접근할 권한이 없습니다.");
+            }
+        }
+
+        // 기존 uvc 항목 확인 (userId-youtubeId로 조회)
         Optional<UserVideoCategory> existingEntry = userVideoCategoryRepository
-                .findByUserIdCategoryIdAndVideoId(userId, categoryId, video.getId());
+                .findByUserIdAndVideoId(userId, video.getId());
 
         if (existingEntry.isPresent()) {
-            throw new IllegalStateException("이미 해당 비디오가 카테고리에 존재합니다.");
+            // 기존 항목이 있으면 카테고리와 이름 업데이트
+            UserVideoCategory uvc = existingEntry.get();
+
+            // 새 카테고리 설정
+            Category category = new Category();
+            category.setId(categoryId);
+            uvc.setCategory(category);
+
+            // 이름 업데이트 (이름이 제공된 경우에만)
+            if (userVideoName != null && !userVideoName.isEmpty()) {
+                uvc.setUserVideoName(userVideoName);
+            }
+
+            userVideoCategoryRepository.save(uvc);
+        } else {
+            // 기존 항목이 없으면 새로 생성
+            User user = new User();
+            user.setId(userId);
+
+            Category category = new Category();
+            category.setId(categoryId);
+
+            UserVideoCategory userVideoCategory = new UserVideoCategory(
+                    user, video, category, userVideoName
+            );
+            userVideoCategoryRepository.save(userVideoCategory);
         }
-
-        // 카테고리 접근 권한 확인
-        Category category = categoryRepository.findById(categoryId)
-                .orElseThrow(() -> new EntityNotFoundException("카테고리를 찾을 수 없습니다: " + categoryId));
-
-        if (category.getUser() != null && !category.getUser().getId().equals(userId)) {
-            throw new AccessDeniedException("해당 카테고리에 접근할 권한이 없습니다.");
-        }
-        // 프록시 객체 사용으로 최적화
-        User user = new User();
-        user.setId(userId);
-
-        // 필요한 엔티티 참조만 설정
-        UserVideoCategory userVideoCategory = new UserVideoCategory(
-                user,video,category,userVideoName
-        );
-        userVideoCategoryRepository.save(userVideoCategory);
     }
 
     /**

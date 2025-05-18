@@ -1,7 +1,7 @@
 package com.example.youtube_lecture_helper.controller;
 
 import com.example.youtube_lecture_helper.dto.*;
-import com.example.youtube_lecture_helper.repository.QuizAttemptProjection;
+import com.example.youtube_lecture_helper.dto.QuizHistorySummaryDto;
 import com.example.youtube_lecture_helper.security.CustomUserDetails;
 import com.example.youtube_lecture_helper.service.QuizAttemptService;
 import com.example.youtube_lecture_helper.service.QuizService;
@@ -80,7 +80,7 @@ public class QuizController {
     
     //userId로 해당 유저의 전체 퀴즈 기록 조회
     @GetMapping("/api/quizzes/attempts/summaries")
-    public ResponseEntity<List<QuizAttemptProjection>> getQuizAttempts(
+    public ResponseEntity<List<QuizHistorySummaryDto>> getQuizAttempts(
             @AuthenticationPrincipal UserDetails userDetails) {
         Long userId = ((CustomUserDetails) userDetails).getId();
         return ResponseEntity.ok(quizAttemptService.getQuizHistorySummaries(userId));
@@ -88,7 +88,7 @@ public class QuizController {
 
     //youtubeId, videoId로 해당 유저가 해당 비디오에 푼 기록들 조회
     @GetMapping("/api/quizzes/attempts/videos/{youtubeId}")
-    public ResponseEntity<List<QuizAttemptProjection>> getQuizAttemptsByVideoId(
+    public ResponseEntity<List<QuizHistorySummaryDto>> getQuizAttemptsByVideoId(
             @PathVariable String youtubeId,
             @AuthenticationPrincipal UserDetails userDetails
     ) {

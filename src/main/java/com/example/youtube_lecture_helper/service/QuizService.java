@@ -2,15 +2,12 @@ package com.example.youtube_lecture_helper.service;
 
 import com.example.youtube_lecture_helper.dto.QuizCountByDifficultyDto;
 import com.example.youtube_lecture_helper.dto.QuizCountDto;
-import com.example.youtube_lecture_helper.dto.UserQuizAnswerDto;
 import com.example.youtube_lecture_helper.entity.QuizAttempt;
 import com.example.youtube_lecture_helper.entity.QuizSet;
 import com.example.youtube_lecture_helper.entity.User;
 import com.example.youtube_lecture_helper.exception.QuizNotFoundException;
 import com.example.youtube_lecture_helper.exception.UserNotFoundException;
-import com.example.youtube_lecture_helper.openai_api.OpenAIGptClient;
 import com.example.youtube_lecture_helper.entity.Quiz;
-import com.example.youtube_lecture_helper.openai_api.QuizType;
 import com.example.youtube_lecture_helper.repository.QuizAttemptRepository;
 import com.example.youtube_lecture_helper.repository.QuizRepository;
 import com.example.youtube_lecture_helper.repository.QuizSetRepository;
@@ -31,8 +28,6 @@ public class QuizService {
     private final QuizAttemptRepository quizAttemptRepository;
     private final QuizSetRepository quizSetRepository;
     private final UserRepository userRepository;
-
-    private final OpenAIGptClient gptClient;    //주관식 정답 맞출 때 필요
 
 //    public QuizService(OpenAIGptClient gptClient, QuizRepository quizRepository, QuizLogService quizLogService){
 //        this.gptClient = gptClient;

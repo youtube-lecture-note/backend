@@ -39,4 +39,6 @@ public interface UserVideoCategoryRepository extends JpaRepository<UserVideoCate
     List<UserVideoCategory> findByCategoryIdsWithVideo(List<Long> categoryIds);
 
     List<UserVideoCategory> findByUserIdAndCategoryId(Long userId, Long categoryId);
+
+    Optional<UserVideoCategory> findByUserIdAndVideoId(Long userId, Long videoId);
 }
