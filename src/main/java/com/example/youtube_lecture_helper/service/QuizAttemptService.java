@@ -1,11 +1,14 @@
 package com.example.youtube_lecture_helper.service;
 
 import com.example.youtube_lecture_helper.dto.QuizAttemptDto;
+import com.example.youtube_lecture_helper.dto.QuizAttemptWithAnswerDto;
 import com.example.youtube_lecture_helper.dto.UserQuizAnswerDto;
 import com.example.youtube_lecture_helper.entity.Quiz;
 import com.example.youtube_lecture_helper.entity.QuizAttempt;
 import com.example.youtube_lecture_helper.entity.QuizSet;
+import com.example.youtube_lecture_helper.exception.AccessDeniedException;
 import com.example.youtube_lecture_helper.exception.QuizNotFoundException;
+import com.example.youtube_lecture_helper.exception.QuizSetNotFoundException;
 import com.example.youtube_lecture_helper.openai_api.ReactiveGptClient;
 import com.example.youtube_lecture_helper.repository.QuizAttemptProjection;
 import com.example.youtube_lecture_helper.repository.QuizAttemptRepository;
@@ -25,6 +28,8 @@ public class QuizAttemptService {
     private final QuizRepository quizRepository;
     private final QuizSetRepository quizSetRepository;
     private final ReactiveGptClient reactiveGptClient;
+
+
     //userId로 전체 퀴즈 풀이 기록 조회
     public List<QuizAttemptProjection> getQuizHistorySummaries(Long userId) {
         return quizAttemptRepository.findQuizSetSummariesByUserId(userId);
@@ -34,12 +39,16 @@ public class QuizAttemptService {
     //userId, youtubeId로 특정 비디오 관련 퀴즈 기록 조회
     public List<QuizAttemptProjection> getVideoQuizHistorySummaries(Long userId, String youtubeId) {
         return quizAttemptRepository.findQuizSetSummariesByUserIdAndYoutubeId(userId, youtubeId);
-        // Controller에서는 이 결과를 받아 (오답수 / 전체문제수) 계산 후 반환
     }
 
     // 특정 QuizSet 상세 기록 조회
-    public List<QuizAttemptDto> getQuizAttemptDetails(Long quizSetId) {
-        return quizAttemptRepository.findDetailedAttemptDTOsByQuizSetId(quizSetId);
+    public List<QuizAttemptWithAnswerDto> getQuizAttemptDetails(Long quizSetId,Long userId) {
+        QuizSet quizSet = quizSetRepository.findById(quizSetId)
+                .orElseThrow(() -> new QuizSetNotFoundException("QuizSet not found with id: " + quizSetId));
+        if (!quizSet.getUser().getId().equals(userId)) {
+            throw new AccessDeniedException("You don't have permission to access this quiz set");
+        }
+        return quizAttemptRepository.findDetailedAttemptsWithAnswersByQuizSetId(quizSetId);
         // Controller에서는 이 결과를 DTO 등으로 변환하여 반환
     }
 
