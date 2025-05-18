@@ -12,11 +12,11 @@ import java.util.List;
 
 public interface QuizAttemptRepository  extends JpaRepository<QuizAttempt,Long> {
     @Query("SELECT " +
-            "  v.youtubeId AS externalVideoId, " +
+            "  v.youtubeId AS youtubeId, " +
             "  COALESCE(uvc.userVideoName, v.youtubeId) AS userVideoName, " +
-            "  v.id AS videoContentId, " +
+            "  v.id AS videoId, " +
             "  qs.attemptTime AS date, " +
-            "  qs.id AS attemptId, " +
+            "  qs.id AS quizSetId, " +
             "  COUNT(qa.id) AS totalQuizzes, " +
             "  SUM(CASE WHEN qa.isCorrect = false THEN 1 ELSE 0 END) AS wrongCount " +
             "FROM QuizAttempt qa " +
@@ -25,7 +25,7 @@ public interface QuizAttemptRepository  extends JpaRepository<QuizAttempt,Long> 
             "JOIN Video v ON q.youtubeId = v.youtubeId " +
             "LEFT JOIN UserVideoCategory uvc ON uvc.video.id = v.id AND uvc.user.id = qs.user.id " +
             "WHERE qs.user.id = :userId " +
-            "GROUP BY uvc.userVideoName, v.id, qs.attemptTime, qs.id " +
+            "GROUP BY v.youtubeId, uvc.userVideoName, v.id, qs.attemptTime, qs.id " +
             "ORDER BY qs.attemptTime DESC")
     List<QuizHistorySummaryDto> findQuizSetSummariesByUserId(@Param("userId") Long userId);
 
@@ -39,9 +39,9 @@ public interface QuizAttemptRepository  extends JpaRepository<QuizAttempt,Long> 
     @Query("""
         SELECT
           qs.id AS quizSetId,
-          qs.attemptTime AS attemptTime,
-          COUNT(qa.id) AS totalAttempts,
-          SUM(CASE WHEN qa.isCorrect = false THEN 1 ELSE 0 END) AS incorrectAttempts
+          qs.attemptTime AS date,
+          COUNT(qa.id) AS totalQuizzes,
+          SUM(CASE WHEN qa.isCorrect = false THEN 1 ELSE 0 END) AS wrongCount 
         FROM QuizAttempt qa
         JOIN qa.quizSet qs
         JOIN qa.quiz q

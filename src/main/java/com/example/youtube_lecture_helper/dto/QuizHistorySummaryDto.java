@@ -7,7 +7,7 @@ public interface QuizHistorySummaryDto {
     String getUserVideoName();     // UserVideoCategory.customName 또는 Video.title
     Long getVideoId();      // Video.id
     LocalDateTime getDate();
-    Long getAttemptId();
+    Long getQuizSetId();
     Long getTotalQuizzes();   // 해당 QuizSet의 전체 문항 수
     Long getWrongCount(); // 해당 QuizSet의 오답 수
 }
