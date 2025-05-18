@@ -3,15 +3,14 @@ package com.example.youtube_lecture_helper.openai_api;
 import java.io.IOException;
 import java.net.CookieManager;
 import java.net.URI;
-import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+// Removed regex Pattern and Matcher as they are not directly needed for API call
+// unless you need to parse something else.
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -20,300 +19,201 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.env.Environment;
+// import org.springframework.beans.factory.annotation.Autowired; // Not used
+// import org.springframework.core.env.Environment; // Not used
 
 @Component
 public class YoutubeSubtitleExtractor {
-    @Value("${proxy.server.addr}")
-    private String proxyBaseUrl;
-    @Value("${proxy.secret.key}")
-    private String proxySecretKey;
-//    private static String proxyBaseUrl;
-//    private static String proxySecretKey;
-//    @Autowired
-//    public YoutubeSubtitleExtractor(Environment env) {
-//        proxyBaseUrl = env.getProperty("proxy.server.addr");
-//        proxySecretKey = env.getProperty("proxy.secret.key");
-//    }
 
-    private static final HttpClient client = HttpClient.newHttpClient();
+    @Value("${transcript.api.url}") // Updated property name
+    private String transcriptApiBaseUrl;
 
+    // Re-usable HttpClient
+    private static final HttpClient client = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.NORMAL)
+            .cookieHandler(new CookieManager()) // May not be needed for calling your Python API
+            .build();
+
+    // getYouTubeTitle can remain as is, it's a separate functionality
     public static String getYouTubeTitle(String youtubeId) {
         String url = "https://www.youtube.com/watch?v=" + youtubeId;
         try {
-            // User-Agent를 설정해야 403 에러 방지
             Document doc = Jsoup.connect(url)
                     .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
                     .get();
-            // <title> 태그에서 제목 추출
             String title = doc.title();
             if (title.endsWith(" - YouTube")) {
                 title = title.replaceFirst(" - YouTube$", "");
             }
             return title;
         } catch (Exception e) {
-            e.printStackTrace();
+            System.err.println("Error fetching YouTube title for ID " + youtubeId + ": " + e.getMessage());
+            // e.printStackTrace(); // Consider logging framework instead
             return "Error fetching title.";
         }
     }
 
-    //소수점 버리고 정수부분만 저장(토큰 아끼기)+toString에서 metadata 제거: 토큰 사용 2400=>1900=>hh:mm:ss 사용으로 2300으로 증가.
-    //hh:mm:ss 포맷 사용 안하면 퀴즈에 timestamp가 제대로 안나온다.
-
-    private static String fetchData2(String urlString) throws IOException, InterruptedException {
-        System.out.println("DEBUG: Fetching URL: " + urlString); // Log the URL
+    // This method now calls your Python API
+    private String fetchTranscriptFromApi(String videoID, String lang) throws IOException, InterruptedException {
+        String apiUrl = transcriptApiBaseUrl + "/transcript?video_id=" + videoID;
+        System.out.println("DEBUG: Fetching transcript from API URL: " + apiUrl);
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(urlString))
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                .header("Accept-Language", "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7")
-                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
+                .uri(URI.create(apiUrl))
+                .header("Accept", "application/json") // Expecting JSON response
                 .GET()
                 .build();
 
-        // You can reuse a client, but creating a new one is fine too.
-        HttpClient client = HttpClient.newBuilder()
-                .followRedirects(HttpClient.Redirect.NORMAL)
-                .cookieHandler(new CookieManager()) // Helps manage cookies if needed for subsequent requests or sessions
-                .build();
-
-        HttpResponse<String> response;
-        try {
-            response = client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)); // Specify UTF-8
-        } catch (IOException | InterruptedException e) {
-            System.err.println("ERROR: Failed to send request or interrupted for URL: " + urlString);
-            e.printStackTrace(); // Print stack trace for detailed error
-            throw e; // Re-throw the exception
-        }
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 
         int statusCode = response.statusCode();
-        System.out.println("DEBUG: Received HTTP Status Code: " + statusCode + " for URL: " + urlString); // Log status code
-
         String responseBody = response.body();
-
-        if (statusCode != 200) {
-            System.err.println("ERROR: Received non-200 status code (" + statusCode + ") for URL: " + urlString);
-            // Log the first part of the response body for clues (e.g., error message, CAPTCHA page)
-            System.err.println("ERROR: Response Body Snippet: " +
-                               (responseBody != null && responseBody.length() > 500 ? responseBody.substring(0, 500) : responseBody));
-             // You might want to throw an exception here instead of returning the error page body
-             // throw new IOException("HTTP request failed with status code: " + statusCode);
-             // Or return an empty string/null if your calling code handles it, but throwing is often clearer
-             return ""; // Returning empty string will likely cause the "Could not find captions" error later
-        }
-
-        // Optionally log a snippet of the successful response body for comparison
-        // System.out.println("DEBUG: Response Body Snippet (Success): " +
-        //                    (responseBody != null && responseBody.length() > 200 ? responseBody.substring(0, 200) : responseBody));
-
-        return responseBody;
-    }
-
-    private static final HttpClient client2 = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .cookieHandler(new CookieManager())
-            .build();
-
-    // private static final String PROXY_BASE_URL = System.getenv("PROXY_SERVER_ADDR");
-    // private static final String PROXY_SECRET_KEY = System.getenv("PROXY_SECRET_KEY");
-
-    private String fetchDataViaProxy(String targetUrlString) throws IOException, InterruptedException {
-        System.out.println("DEBUG: Target URL: " + targetUrlString);
-
-        String encodedTargetUrl = URLEncoder.encode(targetUrlString, StandardCharsets.UTF_8.name());
-        String proxyUrlString = proxyBaseUrl + encodedTargetUrl;
-
-        System.out.println("DEBUG: Fetching via Proxy URL: " + proxyUrlString);
-
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(proxyUrlString))
-                .header("X-Proxy-Secret", proxySecretKey)
-                .GET()
-                .build();
-
-        HttpResponse<String> response;
-        try {
-            response = client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-        } catch (IOException | InterruptedException e) {
-            System.err.println("ERROR: Failed to send request to proxy or interrupted for target URL: " + targetUrlString);
-            e.printStackTrace();
-            throw e;
-        }
-
-        int statusCode = response.statusCode();
-        System.out.println("DEBUG: Received HTTP Status Code from Proxy: " + statusCode + " for target URL: " + targetUrlString);
-
-        String responseBody = response.body();
+        System.out.println("DEBUG: Received HTTP Status Code from transcript API: " + statusCode);
 
         if (statusCode < 200 || statusCode >= 300) {
-            System.err.println("ERROR: Received non-2xx status code (" + statusCode + ") from proxy for target URL: " + targetUrlString);
-            System.err.println("ERROR: Response Body Snippet: " +
-                               (responseBody != null && responseBody.length() > 500 ? responseBody.substring(0, 500) : responseBody));
-             throw new IOException("Proxy request failed with status code: " + statusCode + " for target: " + targetUrlString);
-            // return ""; // 또는 빈 문자열 반환
+            System.err.println("ERROR: Transcript API request failed with status code: " + statusCode + " for video ID: " + videoID);
+            System.err.println("ERROR: Response Body: " + responseBody);
+            throw new IOException("Transcript API request failed with status code: " + statusCode + ". Body: " + responseBody);
         }
-
         return responseBody;
     }
 
     public List<List<SubtitleLine>> getSubtitles(String videoID, String lang) throws IOException, InterruptedException {
-        if (lang == null) {
-            lang = "ko";
+        if (lang == null || lang.trim().isEmpty()) {
+            lang = "ko"; // Default language
         }
 
-        String data = fetchDataViaProxy("https://youtube.com/watch?v=" + videoID);
+        String transcriptJsonString = fetchTranscriptFromApi(videoID, lang);
 
-
-        // 캡션 트랙 데이터 확인
-        if (!data.contains("captionTracks")) {
-            throw new RuntimeException("Could not find captions for video: " + videoID);
-        }
-
-        // 정규식으로 캡션 트랙 데이터 추출
-        Pattern regex = Pattern.compile("\"captionTracks\":(\\[.*?\\])");
-        Matcher matcher = regex.matcher(data);
-
-        if (!matcher.find()) {
-            throw new RuntimeException("Could not parse caption tracks data");
-        }
-
-        String match = matcher.group(1);
-        System.out.println(match);
-
+        List<SubtitleLine> allLines = new ArrayList<>();
         try {
-            JSONArray captionTracks = new JSONArray(match);
-            JSONObject subtitle = null;
-
-            // 요청된 언어의 자막 찾기
-            for (int i = 0; i < captionTracks.length(); i++) {
-                JSONObject track = captionTracks.getJSONObject(i);
-                String vssId = track.optString("vssId", "");
-
-                if (vssId.equals("." + lang) || vssId.equals("a." + lang) || vssId.contains("." + lang)) {
-                    subtitle = track;
-                    break;
-                }
+            JSONArray transcriptArray = new JSONArray(transcriptJsonString);
+            for (int i = 0; i < transcriptArray.length(); i++) {
+                JSONObject entry = transcriptArray.getJSONObject(i);
+                // The Python API now directly gives integer 'start' and 'text'
+                int start = entry.getInt("start"); // Already an int from Python API
+                String text = entry.getString("text");
+                allLines.add(new SubtitleLine(start, text));
             }
-
-            // 한국어 자막을 찾지 못한 경우
-            if (subtitle == null || !subtitle.has("baseUrl")) {
-                System.out.println("Could not find " + lang + " captions for " + videoID + ". Trying English captions...");
-
-                // 영어 자막 찾기
-                subtitle = null;
-                for (int i = 0; i < captionTracks.length(); i++) {
-                    JSONObject track = captionTracks.getJSONObject(i);
-                    String vssId = track.optString("vssId", "");
-
-                    if (vssId.equals("a.en") || vssId.contains(".en")) {
-                        subtitle = track;
-                        break;
-                    }
-                }
-
-                // 영어 자막도 없으면 예외 처리
-                if (subtitle == null || !subtitle.has("baseUrl")) {
-                    System.out.println("Could not find English captions for " + videoID);
-                    throw new RuntimeException("Could not find English captions for " + videoID);
-                }
-            }
-
-            // 자막 데이터 가져오기
-            String transcriptUrl = subtitle.getString("baseUrl");
-            String transcript = fetchData2(transcriptUrl);
-
-            // XML 파싱 및 자막 라인 추출
-            return parseTranscript(transcript);
-
         } catch (JSONException e) {
-
-            throw new RuntimeException("Error parsing JSON: " + e.getMessage());
+            System.err.println("Error parsing JSON response from transcript API: " + e.getMessage());
+            System.err.println("Received JSON String: " + transcriptJsonString);
+            throw new RuntimeException("Error parsing JSON from transcript API: " + e.getMessage(), e);
         }
+
+        if (allLines.isEmpty()) {
+            // This case might happen if the API returns an empty list for a 2xx response,
+            // though the Python API should return 404 if no transcript.
+            System.out.println("No subtitle lines found for video " + videoID + " even after API call.");
+            // Decide how to handle: throw exception or return empty list of lists
+            throw new RuntimeException("No subtitles found for video: " + videoID + " (API returned empty list)");
+        }
+
+        // The chunking logic from your original parseTranscript can now be applied directly
+        return chunkSubtitles(allLines);
     }
 
+    // Renamed and refactored original parseTranscript to only do chunking
+    private List<List<SubtitleLine>> chunkSubtitles(List<SubtitleLine> allLines) {
+        List<List<SubtitleLine>> chunkedSubtitles = new ArrayList<>();
+        if (allLines.isEmpty()) {
+            return chunkedSubtitles; // Return empty list of lists if no lines
+        }
 
-
-    private static List<List<SubtitleLine>> parseTranscript(String transcript) {
-        List<List<SubtitleLine>> ret = new ArrayList<>();
-        List<SubtitleLine> lines = new ArrayList<>();
-
-        // XML 태그 제거 및 정리
-        String cleanedTranscript = transcript
-                .replace("<?xml version=\"1.0\" encoding=\"utf-8\" ?><transcript>", "")
-                .replace("</transcript>", "");
-
-        // 텍스트 라인별로 분리
-        String[] textLines = cleanedTranscript.split("</text>");
-
-        int currentChunkStartTime = 0;
-        int intervalTimes = 600; //10분 단위로 끊어서 반환 리스트에 넣기
         int lastTimestamp = 0;
-        
-        //모든 자막 먼저 얻어서 마지막 자막 시간 알아놓기
-        for (String line : textLines) {
-            line = line.trim();
-            if (line.isEmpty()) { continue; }
-            // 시작 시간 추출
-            Pattern startRegex = Pattern.compile("start=\"([\\d.]+)\"");
-            Matcher startMatcher = startRegex.matcher(line);
-            if (!startMatcher.find()) {
-                continue;
+        for (SubtitleLine line : allLines) {
+            if (line.getStart() > lastTimestamp) {
+                lastTimestamp = line.getStart();
             }
-            //xx.xxx초 => x초 (int로 변경)
-            int start = (int) Double.parseDouble(startMatcher.group(1));
-            if (start > lastTimestamp) {
-                lastTimestamp = start;
-            }
-            String text = line.replaceAll("<text[^>]*>", "")
-                    .replace("&amp;", "&");
-
-            // HTML 태그 제거
-            text = Jsoup.parse(text).text();
-            lines.add(new SubtitleLine(start, text));
         }
 
-        int totalDuration = lastTimestamp + 5;
-        int baseChunkSize = 600;        //기본 10분 이상
-        int minLastChunkSize = 180;     //마지막 청크 : 최소 3분 이상
+        int totalDuration = lastTimestamp + 5; // Add a small buffer
+        int baseChunkSize = 600;        // Default 10 minutes
+        int minLastChunkSize = 180;     // Minimum 3 minutes for the last chunk
+
         int numFullChunks = totalDuration / baseChunkSize;
-        int lastChunkSize = totalDuration % baseChunkSize;
-        //마지막 청크 길이가 짧을 경우 이전 청크에 붙이기.
-        if (lastChunkSize > 0 && lastChunkSize < minLastChunkSize && numFullChunks > 0) {
-            numFullChunks--;
-            lastChunkSize = baseChunkSize + lastChunkSize;
+        int remainingDuration = totalDuration % baseChunkSize;
+
+        // Adjust chunking if the last chunk is too small and there are preceding chunks
+        if (remainingDuration > 0 && remainingDuration < minLastChunkSize && numFullChunks > 0) {
+            numFullChunks--; // The last "full" chunk will absorb the small remainder
+            remainingDuration += baseChunkSize; // New size of the last (now combined) chunk
+        } else if (numFullChunks == 0 && remainingDuration == 0 && totalDuration > 0) {
+            // Edge case: total duration is very small, less than baseChunkSize, but not zero.
+            // Ensure at least one chunk is processed if there's any content.
+            // This will be handled by the loop correctly if numFullChunks is 0 and remainingDuration > 0
         }
+
 
         List<SubtitleLine> currentChunk = new ArrayList<>();
-        int currentChunkEndTime = (numFullChunks > 0) ? baseChunkSize : totalDuration;
+        int currentChunkEndTimeTarget;
         int chunkIndex = 0;
 
-        for (SubtitleLine subtitle : lines) {
-            if (subtitle.getStart() < currentChunkEndTime || chunkIndex >= numFullChunks) {
-                // 현재 청크에 추가
-                currentChunk.add(subtitle);
-            } else {
-                // 현재 청크 완성하고 새 청크 시작
+        if (numFullChunks == 0) { // Video is shorter than baseChunkSize
+            currentChunkEndTimeTarget = totalDuration;
+        } else {
+            currentChunkEndTimeTarget = baseChunkSize;
+        }
+
+
+        for (SubtitleLine subtitle : allLines) {
+            // If the current subtitle starts beyond the current chunk's target end time
+            // AND we are not supposed to be putting everything into the last adjusted chunk.
+            if (subtitle.getStart() >= currentChunkEndTimeTarget && chunkIndex < numFullChunks) {
                 if (!currentChunk.isEmpty()) {
-                    ret.add(currentChunk);
-                    currentChunk = new ArrayList<>();
+                    chunkedSubtitles.add(new ArrayList<>(currentChunk)); // Add a copy
+                    currentChunk.clear();
                 }
                 chunkIndex++;
-
-                // 다음 청크의 종료 시간 설정
-                if (chunkIndex < numFullChunks) {
-                    currentChunkEndTime = (chunkIndex + 1) * baseChunkSize;
-                } else {
-                    currentChunkEndTime = totalDuration;    // 마지막 청크
-                }
-                currentChunk.add(subtitle);
+                currentChunkEndTimeTarget = (chunkIndex + 1) * baseChunkSize;
             }
+            // Add to the current chunk
+            // This also handles the case where chunkIndex >= numFullChunks (i.e., the last chunk, possibly adjusted)
+            currentChunk.add(subtitle);
         }
 
-        // 마지막 청크 추가
+        // Add the last remaining chunk
         if (!currentChunk.isEmpty()) {
-            ret.add(currentChunk);
+            chunkedSubtitles.add(currentChunk);
         }
-        return ret;
+
+        return chunkedSubtitles;
+    }
+
+
+    // Removed old fetchData2 and fetchDataViaProxy as they are replaced by fetchTranscriptFromApi
+    // Removed old parseTranscript as its functionality is split:
+    //   - JSON parsing is in getSubtitles
+    //   - Chunking is in chunkSubtitles
+}
+
+// Make sure you have a SubtitleLine class/record somewhere accessible
+// e.g. (if not already defined elsewhere):
+/*
+class SubtitleLine {
+    private int start;
+    private String text;
+
+    public SubtitleLine(int start, String text) {
+        this.start = start;
+        this.text = text;
+    }
+
+    public int getStart() {
+        return start;
+    }
+
+    public String getText() {
+        return text;
+    }
+
+    @Override
+    public String toString() {
+        // Example: "00:01:30 Hello world"
+        long hours = start / 3600;
+        long minutes = (start % 3600) / 60;
+        long seconds = start % 60;
+        return String.format("%02d:%02d:%02d %s", hours, minutes, seconds, text);
     }
 }
+*/

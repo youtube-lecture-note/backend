@@ -168,36 +168,8 @@ public class CategoryService {
     /**
      * 카테고리에 비디오 추가
      */
-    public void addVideoToCategory(Long userId, String youtubeId, Long categoryId, String userVideoName) {
-        Video video = videoRepository.findByYoutubeId(youtubeId)
-                .orElseThrow(() -> new EntityNotFoundException("해당 유튜브 ID의 비디오를 찾을 수 없습니다: " + youtubeId));
-        // 엔티티 로드를 최소화
-        Optional<UserVideoCategory> existingEntry = userVideoCategoryRepository
-                .findByUserIdCategoryIdAndVideoId(userId, categoryId, video.getId());
-
-        if (existingEntry.isPresent()) {
-            throw new IllegalStateException("이미 해당 비디오가 카테고리에 존재합니다.");
-        }
-
-        // 카테고리 접근 권한 확인
-        Category category = categoryRepository.findById(categoryId)
-                .orElseThrow(() -> new EntityNotFoundException("카테고리를 찾을 수 없습니다: " + categoryId));
-
-        if (category.getUser() != null && !category.getUser().getId().equals(userId)) {
-            throw new AccessDeniedException("해당 카테고리에 접근할 권한이 없습니다.");
-        }
-        // 프록시 객체 사용으로 최적화
-        User user = new User();
-        user.setId(userId);
-
-        // 필요한 엔티티 참조만 설정
-        UserVideoCategory userVideoCategory = new UserVideoCategory(
-                user,video,category,userVideoName
-        );
-        userVideoCategoryRepository.save(userVideoCategory);
-    }
     @Transactional
-    public void addVideoToCategoryv2(Long userId, String youtubeId, Long categoryId, String userVideoName) {
+    public void addVideoToCategory(Long userId, String youtubeId, Long categoryId, String userVideoName) {
         // 비디오 확인
         Video video = videoRepository.findByYoutubeId(youtubeId)
                 .orElseThrow(() -> new EntityNotFoundException("해당 유튜브 ID의 비디오를 찾을 수 없습니다: " + youtubeId));

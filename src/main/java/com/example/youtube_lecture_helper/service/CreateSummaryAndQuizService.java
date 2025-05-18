@@ -2,14 +2,11 @@ package com.example.youtube_lecture_helper.service;
 
 import com.example.youtube_lecture_helper.SummaryStatus;
 import com.example.youtube_lecture_helper.entity.Video;
-import com.example.youtube_lecture_helper.openai_api.OpenAIGptClient;
+import com.example.youtube_lecture_helper.openai_api.*;
 import com.example.youtube_lecture_helper.entity.Quiz;
-import com.example.youtube_lecture_helper.openai_api.QuizType;
-import com.example.youtube_lecture_helper.openai_api.ReactiveGptClient;
-import com.example.youtube_lecture_helper.openai_api.SummaryResult;
 import com.example.youtube_lecture_helper.repository.QuizRepository;
 import com.example.youtube_lecture_helper.repository.VideoRepository;
-import com.example.youtube_lecture_helper.dto.VideoProcessingResult;
+import com.example.youtube_lecture_helper.event.VideoProcessedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,6 +24,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import reactor.core.scheduler.Schedulers;
+import org.springframework.context.ApplicationEventPublisher;
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -35,6 +33,7 @@ public class CreateSummaryAndQuizService {
     private final ReactiveGptClient reactiveGptClient;
     private final VideoRepository videoRepository;
     private final QuizRepository quizRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     private final ConcurrentHashMap<String, Mono<SummaryResult>> processingCache = new ConcurrentHashMap<>();
     
@@ -62,7 +61,7 @@ public class CreateSummaryAndQuizService {
         videoRepository.save(new Video(videoId,summaryResult.getSummary()));
         return summaryResult;
     }
-    public Mono<SummaryResult> initiateVideoProcessing(String videoId, String language) {
+    public Mono<SummaryResult> initiateVideoProcessing(Long userId, String videoId, String language) {
         log.info("Request received to process videoId: {}", videoId);
 
         // Step 1: Check Database for existing *summary* only first.
@@ -74,7 +73,7 @@ public class CreateSummaryAndQuizService {
                     // The cached value is the Mono representing the summary generation task.
                     return processingCache.computeIfAbsent(videoId, key -> {
                         log.info("No active processing found for videoId: {}. Starting summary generation.", key);
-                        return generateSummaryAndTriggerQuizProcessing(key, language)
+                        return generateSummaryAndTriggerQuizProcessing(userId, key, language)
                                 .doFinally(signal -> {
                                     // Remove from cache once summary generation completes or fails.
                                     // Background quiz task continues independently.
@@ -116,7 +115,7 @@ public class CreateSummaryAndQuizService {
      * @param language Language code
      * @return Mono emitting the SummaryResult once generated.
      */
-    private Mono<SummaryResult> generateSummaryAndTriggerQuizProcessing(String videoId, String language) {
+    private Mono<SummaryResult> generateSummaryAndTriggerQuizProcessing(Long userId, String videoId, String language) {
         log.debug("Executing summary generation pipeline for videoId: {}", videoId);
         return reactiveGptClient.getVideoSummaryReactive(videoId, language)
                 .flatMap(summaryResult -> {
@@ -125,7 +124,7 @@ public class CreateSummaryAndQuizService {
                         // *** Trigger background processing ***
                         // We don't wait for this Mono to complete.
                         // subscribe() kicks off the execution on a background thread.
-                        generateAndSaveQuizzesInBackground(videoId, language, summaryResult)
+                        generateAndSaveQuizzesInBackground(userId, videoId, language, summaryResult)
                                 .subscribeOn(Schedulers.boundedElastic()) // Run background task on appropriate scheduler
                                 .subscribe(
                                         vd -> log.info("Background quiz/save task completed successfully for videoId: {}", videoId),
@@ -163,7 +162,7 @@ public class CreateSummaryAndQuizService {
      * @param summaryResult The successful summary result.
      * @return Mono<Void> indicating completion of the background task (or error).
      */
-    private Mono<Void> generateAndSaveQuizzesInBackground(String videoId, String language, SummaryResult summaryResult) {
+    private Mono<Void> generateAndSaveQuizzesInBackground(Long userId, String videoId, String language, SummaryResult summaryResult) {
         log.info("Starting background task: Generate quizzes and save for videoId: {}", videoId);
         String summaryContent = summaryResult.getSummary();
 
@@ -196,7 +195,16 @@ public class CreateSummaryAndQuizService {
                             allQuizzes.size(), tuple.getT1().size(), tuple.getT2().size(), videoId);
 
                     // Save summary (if needed) and quizzes
-                    return saveResultToDatabase(videoId, summaryResult, allQuizzes);
+                    return saveResultToDatabase(videoId, summaryResult, allQuizzes)
+                            .then(Mono.fromRunnable(() -> { //db에 video 저장된 뒤 event 발행해서 기본 category에 저장하기
+                                String title = YoutubeSubtitleExtractor.getYouTubeTitle(videoId);
+                                // 이벤트 발행
+                                eventPublisher.publishEvent(
+                                        new VideoProcessedEvent(videoId, userId, title)
+                                );
+                                log.info("Published video processed event for videoId: {}", videoId);
+                            }))
+                            .subscribeOn(Schedulers.boundedElastic());
                 })
                 .timeout(Duration.ofMinutes(10), Mono.defer(() -> { // Timeout for quiz generation + saving
                     log.error("Background task: Quiz generation/saving timed out for videoId: {}", videoId);
@@ -272,4 +280,10 @@ public class CreateSummaryAndQuizService {
             log.info("Background task: No quizzes generated or found to save for videoId: {}", videoId);
         }
     }
+
+    private void publishVideoSavedEvent(String youtubeId, Long userId, String title) {
+        eventPublisher.publishEvent(new VideoProcessedEvent(youtubeId, userId, title));
+        log.info("Published video processed event for youtubeId: {}", youtubeId);
+    }
+
 }
