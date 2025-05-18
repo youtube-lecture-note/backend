@@ -1,14 +1,7 @@
 package com.example.youtube_lecture_helper.controller;
 
-import com.example.youtube_lecture_helper.SummaryStatus;
-import com.example.youtube_lecture_helper.dto.VideoSummaryResponseDto;
-import com.example.youtube_lecture_helper.openai_api.SummaryResult;
-import com.example.youtube_lecture_helper.openai_api.YoutubeSubtitleExtractor;
 import com.example.youtube_lecture_helper.security.CustomUserDetails;
-import com.example.youtube_lecture_helper.service.CategoryService;
 import com.example.youtube_lecture_helper.service.CreateSummaryAndQuizService;
-import com.example.youtube_lecture_helper.service.VideoService;
-import com.example.youtube_lecture_helper.dto.VideoProcessingResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;

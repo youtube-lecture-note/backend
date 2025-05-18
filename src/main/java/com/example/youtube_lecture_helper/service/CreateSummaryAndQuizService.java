@@ -19,8 +19,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import reactor.core.scheduler.Schedulers;
@@ -29,7 +27,6 @@ import org.springframework.context.ApplicationEventPublisher;
 @RequiredArgsConstructor
 @Slf4j
 public class CreateSummaryAndQuizService {
-    private final OpenAIGptClient gptClient;
     private final ReactiveGptClient reactiveGptClient;
     private final VideoRepository videoRepository;
     private final QuizRepository quizRepository;
@@ -38,29 +35,6 @@ public class CreateSummaryAndQuizService {
     private final ConcurrentHashMap<String, Mono<SummaryResult>> processingCache = new ConcurrentHashMap<>();
     
     //video 존재하는지 검색 후에 호출
-    public SummaryResult generateSummaryQuizAndSave(String videoId) {
-        CompletableFuture<SummaryResult> videoSummaryFuture = gptClient.getVideoSummaryAsync(videoId, "ko");
-
-        SummaryResult summaryResult = videoSummaryFuture.join();
-
-        if (summaryResult.getStatus()==SummaryStatus.NO_SUBTITLE || summaryResult.getStatus()== SummaryStatus.NOT_LECTURE){
-            return summaryResult;   //퀴즈 생성하지 않고 반환
-        }
-        String summaryString = summaryResult.getSummary();
-        
-        CompletableFuture<List<Quiz>> futureQuizzesV2_choice = gptClient.sendSummariesAndGetQuizzesAsyncV2(videoId, summaryString, QuizType.MULTIPLE_CHOICE);
-        CompletableFuture<List<Quiz>> futureQuizzesV2_short = gptClient.sendSummariesAndGetQuizzesAsyncV2(videoId, summaryString, QuizType.SHORT_ANSWER);
-
-        //List<Quiz> quizList = futureQuizzes.join();
-
-        List<Quiz> quizListV2 = new ArrayList<>();
-        quizListV2.addAll(futureQuizzesV2_choice.join());
-        quizListV2.addAll(futureQuizzesV2_short.join());
-
-        quizRepository.saveAll(quizListV2);
-        videoRepository.save(new Video(videoId,summaryResult.getSummary()));
-        return summaryResult;
-    }
     public Mono<SummaryResult> initiateVideoProcessing(Long userId, String videoId, String language) {
         log.info("Request received to process videoId: {}", videoId);
 
