@@ -1,7 +1,7 @@
 package com.example.youtube_lecture_helper.Quiz;
 
 
-import com.example.youtube_lecture_helper.YoutubeLectureHelperApplication;
+import com.example.youtube_lecture_helper.dto.QuizHistorySummaryDto;
 import com.example.youtube_lecture_helper.entity.*;
 import com.example.youtube_lecture_helper.dto.QuizAttemptDto;
 import com.example.youtube_lecture_helper.repository.*;
@@ -10,8 +10,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ContextConfiguration;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -59,14 +57,14 @@ class QuizAttemptRepositoryTest {
         quizAttemptRepository.save(attempt);
 
         // --- When ---
-        List<QuizAttemptProjection> summaries = quizAttemptRepository.findQuizSetSummariesByUserId(user.getId());
+        List<QuizHistorySummaryDto> summaries = quizAttemptRepository.findQuizSetSummariesByUserId(user.getId());
 
         // --- Then ---
         assertThat(summaries).isNotEmpty();
-        QuizAttemptProjection summary = summaries.get(0);
-        assertThat(summary.getQuizSetId()).isEqualTo(quizSet.getId());
-        assertThat(summary.getTotalAttempts()).isEqualTo(1L);
-        assertThat(summary.getIncorrectAttempts()).isEqualTo(0L);
+        QuizHistorySummaryDto summary = summaries.get(0);
+        assertThat(summary.getAttemptId()).isEqualTo(quizSet.getId());
+        assertThat(summary.getTotalQuizzes()).isEqualTo(1L);
+        assertThat(summary.getWrongCount()).isEqualTo(0L);
     }
 
     @Test
