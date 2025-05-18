@@ -18,7 +18,9 @@ import org.json.JSONObject;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestTemplate;
 // import org.springframework.beans.factory.annotation.Autowired; // Not used
 // import org.springframework.core.env.Environment; // Not used
 
@@ -36,19 +38,19 @@ public class YoutubeSubtitleExtractor {
 
     // getYouTubeTitle can remain as is, it's a separate functionality
     public static String getYouTubeTitle(String youtubeId) {
-        String url = "https://www.youtube.com/watch?v=" + youtubeId;
+        String flaskUrl = "http://localhost:5001/youtube-title?id=" + youtubeId;
         try {
-            Document doc = Jsoup.connect(url)
-                    .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
-                    .get();
-            String title = doc.title();
-            if (title.endsWith(" - YouTube")) {
-                title = title.replaceFirst(" - YouTube$", "");
+            RestTemplate restTemplate = new RestTemplate();
+            ResponseEntity<String> response = restTemplate.getForEntity(flaskUrl, String.class);
+
+            JSONObject json = new JSONObject(response.getBody());
+            if (json.has("title")) {
+                return json.getString("title");
+            } else {
+                return "Error: " + json.optString("error", "Unknown error");
             }
-            return title;
         } catch (Exception e) {
-            System.err.println("Error fetching YouTube title for ID " + youtubeId + ": " + e.getMessage());
-            // e.printStackTrace(); // Consider logging framework instead
+            System.err.println("Error contacting Flask server for YouTube title: " + e.getMessage());
             return "Error fetching title.";
         }
     }
