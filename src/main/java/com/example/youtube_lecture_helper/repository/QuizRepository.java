@@ -20,4 +20,7 @@ public interface QuizRepository extends JpaRepository<Quiz,Long> {
             "WHERE q.youtubeId = :youtubeId " +
             "GROUP BY q.difficulty")
     List<QuizCountByDifficultyDto> countQuizzesByDifficultyAndYoutubeId(@Param("youtubeId") String youtubeId);
+
+    @Query("SELECT q FROM Quiz q WHERE q.id IN :ids")
+    List<Quiz> findAllByIdIn(@Param("ids") List<Long> ids);
 }
