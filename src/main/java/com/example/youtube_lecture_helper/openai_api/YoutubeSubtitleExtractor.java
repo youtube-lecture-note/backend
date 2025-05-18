@@ -17,6 +17,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +38,25 @@ public class YoutubeSubtitleExtractor {
 //    }
 
     private static final HttpClient client = HttpClient.newHttpClient();
+
+    public static String getYouTubeTitle(String youtubeId) {
+        String url = "https://www.youtube.com/watch?v=" + youtubeId;
+        try {
+            // User-Agent를 설정해야 403 에러 방지
+            Document doc = Jsoup.connect(url)
+                    .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                    .get();
+            // <title> 태그에서 제목 추출
+            String title = doc.title();
+            if (title.endsWith(" - YouTube")) {
+                title = title.replaceFirst(" - YouTube$", "");
+            }
+            return title;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "Error fetching title.";
+        }
+    }
 
     //소수점 버리고 정수부분만 저장(토큰 아끼기)+toString에서 metadata 제거: 토큰 사용 2400=>1900=>hh:mm:ss 사용으로 2300으로 증가.
     //hh:mm:ss 포맷 사용 안하면 퀴즈에 timestamp가 제대로 안나온다.
