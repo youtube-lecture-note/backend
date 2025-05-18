@@ -28,6 +28,7 @@ import org.springframework.context.ApplicationEventPublisher;
 @Slf4j
 public class CreateSummaryAndQuizService {
     private final ReactiveGptClient reactiveGptClient;
+    private final YoutubeSubtitleExtractor youtubeSubtitleExtractor;
     private final VideoRepository videoRepository;
     private final QuizRepository quizRepository;
     private final ApplicationEventPublisher eventPublisher;
@@ -171,7 +172,7 @@ public class CreateSummaryAndQuizService {
                     // Save summary (if needed) and quizzes
                     return saveResultToDatabase(videoId, summaryResult, allQuizzes)
                             .then(Mono.fromRunnable(() -> { //db에 video 저장된 뒤 event 발행해서 기본 category에 저장하기
-                                String title = YoutubeSubtitleExtractor.getYouTubeTitle(videoId);
+                                String title = youtubeSubtitleExtractor.getYouTubeTitle(videoId);
                                 // 이벤트 발행
                                 eventPublisher.publishEvent(
                                         new VideoProcessedEvent(videoId, userId, title)

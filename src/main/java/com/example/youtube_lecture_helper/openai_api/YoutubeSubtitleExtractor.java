@@ -37,8 +37,8 @@ public class YoutubeSubtitleExtractor {
             .build();
 
     // getYouTubeTitle can remain as is, it's a separate functionality
-    public static String getYouTubeTitle(String youtubeId) {
-        String flaskUrl = "http://localhost:5001/youtube-title?id=" + youtubeId;
+    public String getYouTubeTitle(String youtubeId) {
+        String flaskUrl = transcriptApiBaseUrl+"/youtube-title?id=" + youtubeId;
         try {
             RestTemplate restTemplate = new RestTemplate();
             ResponseEntity<String> response = restTemplate.getForEntity(flaskUrl, String.class);
