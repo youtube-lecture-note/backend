@@ -35,7 +35,7 @@ public class QuizAttemptWithAnswerDto {
         this.question = question;
         this.youtubeId = youtubeId;
         this.quizSetId = quizSetId;
-        if(!selective)  //객관식일때만 options 넣기
+        if(selective)  //객관식일때만 options 넣기
             this.options = Arrays.asList(option1,option2,option3,option4);
         this.correctAnswer = correctAnswer;
         this.comment = comment;
