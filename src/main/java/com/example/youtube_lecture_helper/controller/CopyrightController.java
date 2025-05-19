@@ -26,7 +26,7 @@ public class CopyrightController {
                 -> ApiResponse.buildResponse(HttpStatus.OK, "SUCCESS", null));
     }
 
-    @PostMapping("/api/copyright/ban/")
+    @PostMapping("/api/copyright/ban")
     public ApiResponse<String> banVideo(
             @RequestParam String videoId,
             @RequestParam String owner
