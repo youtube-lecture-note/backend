@@ -17,6 +17,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -76,6 +77,8 @@ public class SecurityConfig {
 
         // Max Age 설정 (초 단위)
         configuration.setMaxAge(3600L);
+        configuration.setExposedHeaders(List.of("Set-Cookie"));
+        
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);  // 모든 경로에 적용
