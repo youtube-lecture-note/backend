@@ -74,10 +74,10 @@ public class AuthController {
             }
             // JWT 생성
             String jwt = tokenProvider.generateTokenFromUserId(userDetails.getId(), userDetails.getUsername(), userDetails.getAuthorities());
-
+            tokenProvider.addTokenCookie(response,jwt);
             // HTTP-only 쿠키에 JWT 저장
-            Cookie jwtCookie = tokenProvider.createTokenCookie(jwt);
-            response.addCookie(jwtCookie);
+            //Cookie jwtCookie = tokenProvider.createTokenCookie(jwt);
+            //response.addCookie(jwtCookie);
 
             return ResponseEntity.ok().body("Login successful. JWT set in HttpOnly cookie.");
 
