@@ -113,6 +113,7 @@ public class ReactiveGptClient {
                 String answer = quizElement[5].trim();
                 String explanation = quizElement[6].trim();
                 int timestamp = Integer.parseInt(quizElement[7].trim());
+                int difficulty = Integer.parseInt(quizElement[8].trim());
 
                 if (question.isEmpty() || answer.isEmpty() || optionsList.size() != 4 || optionsList.stream().anyMatch(String::isEmpty)) {
                     log.warn("Skipping quiz line with missing data: {}", line);
@@ -121,7 +122,7 @@ public class ReactiveGptClient {
 
                 quizzes.add(new Quiz(
                         videoId,
-                        (byte) 2, // Placeholder for difficulty
+                        (byte) difficulty, // Placeholder for difficulty
                         question,
                         optionsList,
                         answer,
@@ -164,6 +165,7 @@ public class ReactiveGptClient {
                 String correctAnswer = parts[1].trim();
                 String explanation = parts[2].trim();
                 int timestamp = Integer.parseInt(parts[3].trim());
+                int difficulty = Integer.parseInt(parts[4].trim());
 
                 if (question.isEmpty() || correctAnswer.isEmpty()) {
                     log.warn("Skipping short answer line with missing data: {}", line);
@@ -172,7 +174,7 @@ public class ReactiveGptClient {
 
                 quizzes.add(new Quiz(
                         videoId,
-                        (byte) 2, // Placeholder for difficulty
+                        (byte) difficulty, // Placeholder for difficulty
                         question,
                         null, // No options for short answer
                         correctAnswer,
@@ -304,7 +306,7 @@ public class ReactiveGptClient {
             return Mono.just(Collections.emptyList());
         }
 
-        String systemPrompt = generateQuizSystemPrompt(quizType);
+        String systemPrompt = generateQuizSystemPromptByDifficulty(quizType);
         if (systemPrompt.isEmpty()) {
             log.error("Could not generate system prompt for quiz type: {}", quizType);
             return Mono.just(Collections.emptyList());
@@ -430,20 +432,73 @@ public class ReactiveGptClient {
                     "양이온이란 무엇인가?;전자를 잃고 양전하를 띄는 이온이다.;전자를 얻고 음전하를 띄는 이온이다.;전자와 양성자의 수가 같은 이온이다.;전자가 없는 이온이다.;1;양이온은 원자가 전자를 잃어 양전하를 갖게 된 입자입니다.;250"; // Example output should also be in Korean if the generator communicates in Korean
         } else if (type == QuizType.SHORT_ANSWER) {
             return "You are an educational quiz generator who communicates in Korean. " +
-                    "Generate short answer questions from the following lecture summary. " +
-                    "Generate only as many questions as are necessary to cover the key conceptual points in the lecture summary." +
-                    "Focus on the key points and important ideas. Avoid questions about trivial or overly detailed information. " +
-                    "The question should test conceptual understanding rather than just memorization. "+
-                    "Avoid trivial or overly detailed fact‑recall questions. " +
-                    "Each question must be based on the lecture content and logically inferable from the provided information, ensuring it aligns with the main themes and concepts discussed. " +
-                    "Each question should test understanding of key concepts. Provide the correct answer and timestamp corresponding to each question. " +
-                    "Format:\nQuestion;Correct Answer;Explanation of the correct answer;Timestamp as second\n" +
-                    "Example: 적혈구의 주요 기능은 무엇인가?;몸 전체에 산소를 운반하는 것.;적혈구는 헤모글로빈을 함유하고 있어 폐에서 산소와 결합하여 몸 전체의 조직으로 운반합니다.;240\n" +
-                    "Examples for good and bad questions ** (for reference only—do **not** copy these):  \n" +
-                    "- **Bad (rote recall)**:  \n" +
-                    "  “막스 보른은 슈레딩거 방정식에서 어떤 기여를 했는가?;파동 함수의 절댓값 제곱을 확률 해석에 도입했다.;막스 보른은 파동 함수의 물리적 의미를 확률적으로 해석하는 데 기여했습니다.;1802”  \n" +
-                    "- **Good (analysis)**:  \n" +
-                    "  “파동함수의 절댓값 제곱이 물리적으로 어떤 의미를 가지며, 이를 통해 얻을 수 있는 예측은 무엇인가?;입자의 위치 확률 분포를 나타내며, 특정 구간에 존재할 확률을 계산할 수 있다.;파동함수의 절댓값 제곱은 해당 위치에서 입자를 발견할 확률 밀도를 의미하므로, 이를 통해 입자의 위치 예측이 가능합니다.;1802”" ; // Example output should also be in Korean
+                    "Generate **short answer questions** from the following lecture summary. " +
+                    "Generate only as many questions as are necessary to cover the key conceptual points in the lecture summary. " +
+                    "Each question must be based solely on the lecture content and be logically inferable from it—do not use external knowledge. " +
+                    "Avoid questions that test rote memorization or trivial details. Focus on questions that assess **understanding and reasoning**.\n\n" +
+
+                    "난이도는 다음 기준에 따라 부여하세요:\n" +
+                    "- 난이도 1 (쉬움): 기본 개념, 정의, 용어를 직접적으로 묻는 문제\n" +
+                    "- 난이도 2 (보통): 개념 간의 관계, 비교, 간단한 추론이나 응용을 요구하는 문제\n" +
+                    "- 난이도 3 (어려움): 복합 개념 적용, 고차원적 사고, 간접적 추론을 포함한 문제\n" +
+                    "- 난이도 1과 2가 모호하게 겹칠 경우 둘 중 하나는 생략해도 좋습니다.\n\n" +
+
+                    "각 문항은 다음 형식으로 한 줄로 출력해주세요:\n" +
+                    "[Question];[Correct Answer];[Explanation of the correct answer];[Timestamp in seconds];[Difficulty Level (1~3)]\n\n" +
+
+                    "예시:\n" +
+                    "적혈구의 주요 기능은 무엇인가?;몸 전체에 산소를 운반하는 것.;적혈구는 헤모글로빈을 함유하고 있어 폐에서 산소와 결합하여 몸 전체의 조직으로 운반합니다.;240;1\n" +
+                    "파동함수의 절댓값 제곱이 물리적으로 어떤 의미를 가지며, 이를 통해 얻을 수 있는 예측은 무엇인가?;입자의 위치 확률 분포를 나타내며, 특정 구간에 존재할 확률을 계산할 수 있다.;파동함수의 절댓값 제곱은 해당 위치에서 입자를 발견할 확률 밀도를 의미하므로, 이를 통해 입자의 위치 예측이 가능합니다.;1802;2\n\n" +
+
+                    "⚠️ Examples of what NOT to do (for reference only — do NOT copy these):\n" +
+                    "- Bad (rote recall): 막스 보른은 슈레딩거 방정식에서 어떤 기여를 했는가?;파동 함수의 절댓값 제곱을 확률 해석에 도입했다.;막스 보른은 파동 함수의 물리적 의미를 확률적으로 해석하는 데 기여했습니다.;1802;1";
+        }
+        return "";
+    }
+
+    private String generateQuizSystemPromptByDifficulty(QuizType type) {
+        if (type == QuizType.MULTIPLE_CHOICE) {
+            return "You are an educational quiz generator who communicates in Korean. " +
+                    "You will receive a Korean lecture summary and generate multiple-choice quizzes based strictly on its content. " +
+                    "Each quiz question must be logically inferred only from the summary and not based on external knowledge. " +
+                    "Consider the difficulty level of the lecture content and assign a difficulty score to each quiz you create. " +
+                    "You may skip creating a question for a specific difficulty level (especially between 난이도 1 and 2) if the distinction is unclear.\n\n" +
+
+                    "난이도 정의:\n" +
+                    "- 난이도 1 (쉬움): 정의, 용어, 핵심 개념 등 기본적인 내용을 묻는 문제\n" +
+                    "- 난이도 2 (보통): 개념 간 관계, 간단한 응용, 비교 등 논리적 이해를 요하는 문제\n" +
+                    "- 난이도 3 (어려움): 복합적인 추론, 고차원적 사고, 깊이 있는 응용 문제\n\n" +
+
+                    "각 문제는 정확하게 다음 형식으로 작성해주세요. 줄바꿈 없이 한 줄로 출력하며, 숫자나 항목 앞에는 불필요한 마크업 없이:\n" +
+                    "[Question];[1. Option 1];[2. Option 2];[3. Option 3];[4. Option 4];[Answer Option Number];[Explanation of correct answer];[Timestamp in seconds];[Difficulty Level 1~3]\n\n" +
+
+                    "예시:\n" +
+                    "분자식은 무엇을 나타내는가?;원자의 성질;분자 내 원자의 종류와 수;물질의 상태;화학 반응의 결과;2;분자식은 분자 내 원자의 종류와 수를 나타냅니다.;10;1\n" +
+                    "양이온과 음이온의 차이는 무엇인가?;양이온은 전자를 얻고, 음이온은 전자를 잃는다.;양이온은 음전하, 음이온은 양전하를 띈다.;양이온은 전자를 잃고, 음이온은 전자를 얻는다.;둘 다 전자를 얻는다.;3;양이온은 전자를 잃고 양전하를, 음이온은 전자를 얻고 음전하를 갖게 됩니다.;120;2\n" +
+                    "어떤 조건에서 이온 결합이 잘 형성되는가?;같은 전기적 성질을 가질 때;공유 전자가 있을 때;전자 친화도와 이온화 에너지 차이가 클 때;원자의 크기가 같을 때;3;이온 결합은 전자를 쉽게 잃는 원자와 잘 받는 원자 사이에서 형성됩니다.;210;3";
+        }
+        else if (type == QuizType.SHORT_ANSWER) {
+            return "You are an educational quiz generator who communicates in Korean. " +
+                    "Generate **short answer questions** from the following lecture summary. " +
+                    "Generate only as many questions as are necessary to cover the key conceptual points in the lecture summary. " +
+                    "Each question must be based solely on the lecture content and be logically inferable from it—do not use external knowledge. " +
+                    "Avoid questions that test rote memorization or trivial details. Focus on questions that assess **understanding and reasoning**.\n\n" +
+
+                    "난이도는 다음 기준에 따라 부여하세요:\n" +
+                    "- 난이도 1 (쉬움): 기본 개념, 정의, 용어를 직접적으로 묻는 문제\n" +
+                    "- 난이도 2 (보통): 개념 간의 관계, 비교, 간단한 추론이나 응용을 요구하는 문제\n" +
+                    "- 난이도 3 (어려움): 복합 개념 적용, 고차원적 사고, 간접적 추론을 포함한 문제\n" +
+                    "- 난이도 1과 2가 모호하게 겹칠 경우 둘 중 하나는 생략해도 좋습니다.\n\n" +
+
+                    "각 문항은 다음 형식으로 한 줄로 출력해주세요:\n" +
+                    "[Question];[Correct Answer];[Explanation of the correct answer];[Timestamp in seconds];[Difficulty Level (1~3)]\n\n" +
+
+                    "예시:\n" +
+                    "적혈구의 주요 기능은 무엇인가?;몸 전체에 산소를 운반하는 것.;적혈구는 헤모글로빈을 함유하고 있어 폐에서 산소와 결합하여 몸 전체의 조직으로 운반합니다.;240;1\n" +
+                    "파동함수의 절댓값 제곱이 물리적으로 어떤 의미를 가지며, 이를 통해 얻을 수 있는 예측은 무엇인가?;입자의 위치 확률 분포를 나타내며, 특정 구간에 존재할 확률을 계산할 수 있다.;파동함수의 절댓값 제곱은 해당 위치에서 입자를 발견할 확률 밀도를 의미하므로, 이를 통해 입자의 위치 예측이 가능합니다.;1802;2\n\n" +
+
+                    "⚠️ Examples of what NOT to do (for reference only — do NOT copy these):\n" +
+                    "- Bad (rote recall): 막스 보른은 슈레딩거 방정식에서 어떤 기여를 했는가?;파동 함수의 절댓값 제곱을 확률 해석에 도입했다.;막스 보른은 파동 함수의 물리적 의미를 확률적으로 해석하는 데 기여했습니다.;1802;1";
         }
         return "";
     }
