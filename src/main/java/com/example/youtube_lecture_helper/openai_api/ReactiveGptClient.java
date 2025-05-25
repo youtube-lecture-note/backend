@@ -100,8 +100,8 @@ public class ReactiveGptClient {
             try {
                 log.debug("Parsing quiz line: {}", line);
                 String[] quizElement = line.split(";");
-                if (quizElement.length != 8) {
-                    log.warn("Skipping malformed quiz line (expected 8 parts, got {}): {}", quizElement.length, line);
+                if (quizElement.length != 9) {
+                    log.warn("Skipping malformed quiz line (expected 9 parts, got {}): {}", quizElement.length, line);
                     continue;
                 }
                 List<String> optionsList = Arrays.stream(quizElement, 1, 5)
@@ -156,8 +156,8 @@ public class ReactiveGptClient {
             try {
                 log.debug("Parsing short answer quiz line: {}", line);
                 String[] parts = line.split(";");
-                if (parts.length != 4) {
-                    log.warn("Skipping malformed short answer line (expected 4 parts, got {}): {}", parts.length, line);
+                if (parts.length != 5) {
+                    log.warn("Skipping malformed short answer line (expected 5 parts, got {}): {}", parts.length, line);
                     continue;
                 }
 
