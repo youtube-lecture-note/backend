@@ -97,4 +97,6 @@ public interface QuizAttemptRepository  extends JpaRepository<QuizAttempt,Long> 
             "ORDER BY qa.id ASC")
     List<QuizAttemptWithAnswerDto> findDetailedAttemptsWithAnswersByQuizSetId(@Param("quizSetId") Long quizSetId);
 
+
+
 }
