@@ -2,6 +2,7 @@ package com.example.youtube_lecture_helper.controller;
 
 import com.example.youtube_lecture_helper.security.CustomUserDetails;
 import com.example.youtube_lecture_helper.service.CreateSummaryAndQuizService;
+import com.example.youtube_lecture_helper.service.VideoService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -25,6 +26,7 @@ public class SummaryController {
 //        //veTpPfu1-o8 : 뱀(58분)
 //        //vLaFAKnaRJU : 영어강의
     private final CreateSummaryAndQuizService createSummaryAndQuizService;
+    private final VideoService videoService;
 
     // @GetMapping(value = "/api/summary", produces = "application/json")
     // //ApiResponse<String>
@@ -84,6 +86,13 @@ public class SummaryController {
                     return Mono.just(ApiResponse.<String>buildResponse(
                             HttpStatus.INTERNAL_SERVER_ERROR, errorMessage, null));
                 });
+    }
+    @GetMapping(value="/api/summary")
+    public ResponseEntity<?> getSummaryById(
+            @RequestParam Long videoId,
+            @AuthenticationPrincipal UserDetails userDetails
+    ){
+        return ResponseEntity.ok(videoService.getVideoSummaryById(videoId));
     }
 
 //    @GetMapping(value="/api/summary/test")
