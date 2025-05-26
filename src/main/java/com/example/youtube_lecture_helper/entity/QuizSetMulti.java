@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 @Getter @Setter
+@Entity
 public class QuizSetMulti {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
