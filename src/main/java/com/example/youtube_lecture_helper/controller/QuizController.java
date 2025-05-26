@@ -39,7 +39,7 @@ public class QuizController {
     ){
         Long userId = ((CustomUserDetails) userDetails).getId();
         QuizService.CreatedQuizSetDTO quizzes = quizService.createQuizSetForUser(
-                userId,difficulty,videoId,count
+                userId,difficulty,videoId,count,false
         );
         return ApiResponse.buildResponse(HttpStatus.OK,"success",quizzes);
     }
@@ -94,5 +94,26 @@ public class QuizController {
     ) {
         Long userId = ((CustomUserDetails) userDetails).getId();
         return ResponseEntity.ok(quizAttemptService.getVideoQuizHistorySummaries(userId, youtubeId));
+    }
+    //한명이 quizSet 생성 요청하면 QuizSetMulti 생성
+    @GetMapping("/api/quizzes/multi/create")
+    public ResponseEntity<?> createQuizSetMulti(
+            @RequestParam String videoId,
+            @RequestParam Integer difficulty,
+            @RequestParam Integer count,
+            @AuthenticationPrincipal UserDetails userDetails
+    ){
+        Long userId = ((CustomUserDetails)userDetails).getId();
+        return ResponseEntity.ok(quizService.createQuizSetForUser(userId,difficulty,videoId,count,true));
+    }
+
+    //redisKey로 만든 quizSet 가져오기
+    @GetMapping("/api/quizzes/multi")
+    public ResponseEntity<?> getMultiQuizzes(
+            @RequestParam String redisKey,
+            @AuthenticationPrincipal UserDetails userDetails
+    ){
+        Long userId = ((CustomUserDetails)userDetails).getId();
+        return ResponseEntity.ok(quizService.getQuizSetQuizzesByRedisQuizSetKey(userId,redisKey));  //내부적으로는 quizAttempt에 시도 생성
     }
 }
