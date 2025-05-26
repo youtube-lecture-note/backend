@@ -86,7 +86,7 @@ public class QuizServiceTest {
         when(quizSetRepository.save(any(QuizSet.class))).thenReturn(savedQuizSet);
 
         // When
-        QuizService.CreatedQuizSetDTO result = quizService.createQuizSetForUser(userId, difficulty, youtubeId, numberOfQuestions);
+        QuizService.CreatedQuizSetDTO result = quizService.createQuizSetForUser(userId, difficulty, youtubeId, numberOfQuestions,false);
 
         // Then
         assertNotNull(result);

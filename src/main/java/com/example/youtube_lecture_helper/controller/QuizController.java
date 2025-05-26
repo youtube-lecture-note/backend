@@ -39,7 +39,7 @@ public class QuizController {
     ){
         Long userId = ((CustomUserDetails) userDetails).getId();
         QuizService.CreatedQuizSetDTO quizzes = quizService.createQuizSetForUser(
-                userId,difficulty,videoId,count
+                userId,difficulty,videoId,count,false
         );
         return ApiResponse.buildResponse(HttpStatus.OK,"success",quizzes);
     }
