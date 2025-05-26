@@ -2,18 +2,15 @@ package com.example.youtube_lecture_helper.service;
 
 import com.example.youtube_lecture_helper.dto.QuizCountByDifficultyDto;
 import com.example.youtube_lecture_helper.dto.QuizCountDto;
-import com.example.youtube_lecture_helper.entity.QuizAttempt;
-import com.example.youtube_lecture_helper.entity.QuizSet;
-import com.example.youtube_lecture_helper.entity.User;
+import com.example.youtube_lecture_helper.entity.*;
+import com.example.youtube_lecture_helper.exception.KeyNotFoundException;
 import com.example.youtube_lecture_helper.exception.QuizNotFoundException;
+import com.example.youtube_lecture_helper.exception.QuizSetNotFoundException;
 import com.example.youtube_lecture_helper.exception.UserNotFoundException;
-import com.example.youtube_lecture_helper.entity.Quiz;
-import com.example.youtube_lecture_helper.repository.QuizAttemptRepository;
-import com.example.youtube_lecture_helper.repository.QuizRepository;
-import com.example.youtube_lecture_helper.repository.QuizSetRepository;
-import com.example.youtube_lecture_helper.repository.UserRepository;
+import com.example.youtube_lecture_helper.repository.*;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.autoconfigure.cache.CacheProperties;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -27,7 +24,10 @@ public class QuizService {
     private final QuizRepository quizRepository;
     private final QuizAttemptRepository quizAttemptRepository;
     private final QuizSetRepository quizSetRepository;
+    private final QuizSetMultiRepository quizSetMultiRepository;
     private final UserRepository userRepository;
+
+    private final RedisService redisService;
 
 //    public QuizService(OpenAIGptClient gptClient, QuizRepository quizRepository, QuizLogService quizLogService){
 //        this.gptClient = gptClient;
@@ -78,30 +78,77 @@ public class QuizService {
         quizSet.setAttemptTime(LocalDateTime.now());
         QuizSet savedQuizSet = quizSetRepository.save(quizSet); // Save to get the ID
 
-        // 6. Create Quiz Attempts for each selected quiz
-        List<QuizAttempt> quizAttempts = selectedQuizzes.stream().map(quiz -> {
-            QuizAttempt attempt = new QuizAttempt();
-            attempt.setQuizSet(savedQuizSet);
-            attempt.setQuiz(quiz);
-            // userAnswer and isCorrect are initially null/false by default
-            return attempt;
-        }).collect(Collectors.toList());
+        if(isForMultiUsers){
+            String quizSetkey = redisService.generateQuizKey(savedQuizSet.getId()); //redis로 key 만들어서 저장
+            List<QuizSetMulti> quizSetMultiList = selectedQuizzes.stream()  //selected quiz로 quizSetMulti에 저장
+                    .map(quiz -> {
+                        QuizSetMulti quizSetMulti = new QuizSetMulti();
+                        quizSetMulti.setQuizSet(savedQuizSet);
+                        quizSetMulti.setQuiz(quiz);
+                        return quizSetMulti;
+                    })
+                    .toList();
+            quizSetMultiRepository.saveAll(quizSetMultiList);
+            return new CreatedQuizSetDTO(savedQuizSet.getId(), null, quizSetkey);
+        }
 
-        quizAttemptRepository.saveAll(quizAttempts); // Save all attempts (often more efficient)
+        else{
+            // 6. Create Quiz Attempts for each selected quiz
+            List<QuizAttempt> quizAttempts = selectedQuizzes.stream().map(quiz -> {
+                QuizAttempt attempt = new QuizAttempt();
+                attempt.setQuizSet(savedQuizSet);
+                attempt.setQuiz(quiz);
+                // userAnswer and isCorrect are initially null/false by default
+                return attempt;
+            }).collect(Collectors.toList());
 
-        // 7. Prepare and Return Response DTO (important!)
-        //    Return only the necessary info (quiz questions, options, quizSetId)
-        //    DO NOT return the Quiz entities directly if they contain the answers.
-        List<QuizQuestionDTO> questionDTOs = selectedQuizzes.stream()
-                .map(this::mapToQuizQuestionDTO) // Helper method to map Quiz -> QuizQuestionDTO
-                .collect(Collectors.toList());
+            quizAttemptRepository.saveAll(quizAttempts); // Save all attempts (often more efficient)
 
-        return new CreatedQuizSetDTO(savedQuizSet.getId(), questionDTOs);
+            // 7. Prepare and Return Response DTO (important!)
+            //    Return only the necessary info (quiz questions, options, quizSetId)
+            //    DO NOT return the Quiz entities directly if they contain the answers.
+            List<QuizQuestionDTO> questionDTOs = selectedQuizzes.stream()
+                    .map(this::mapToQuizQuestionDTO) // Helper method to map Quiz -> QuizQuestionDTO
+                    .toList();
+
+            return new CreatedQuizSetDTO(savedQuizSet.getId(), questionDTOs);
+        }
     }
 
-    //users에게 문제 뿌림, 문제 풀기 위해 무언가 필요할듯? redis 사용하는것도 괜찮을듯?
+    //뿌린 quizSetKey로 퀴즈셋 접근해서 quizAttempt에 만들기
+    //캐시 적용 비교해보기
+    @Transactional
+    public CreatedQuizSetDTO getQuizSetQuizzesByRedisQuizSetKey(Long userId, String redisKey){
+        Long quizSetId = redisService.resolveQuizSetId(redisKey).orElseThrow(()-> new KeyNotFoundException("Wrong Redis Key"));
+        List<QuizSetMulti> quizSetMultiList = quizSetMultiRepository.findByQuizSetId(quizSetId);
+        QuizSet quizSet = quizSetRepository.findById(quizSetId)
+                .orElseThrow(() -> new QuizSetNotFoundException("QuizSet not found"));
 
+        List<Quiz> selectedQuizzes = quizSetMultiList.stream()
+                .map(QuizSetMulti::getQuiz)
+                .toList();
 
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));   //user
+
+        List<QuizAttempt> quizAttempts = selectedQuizzes.stream()
+                .map(quiz -> {
+                    QuizAttempt attempt = new QuizAttempt();
+                    attempt.setQuizSet(quizSet);
+                    attempt.setQuiz(quiz);
+                    attempt.setUser(user); // 사용자 설정 (QuizAttempt에 user 필드가 있다고 가정)
+                    // userAnswer and isCorrect are initially null/false by default
+                    return attempt;
+                })
+                .toList();
+        quizAttemptRepository.saveAll(quizAttempts);
+        //quiz->quizdto(answer 제거)
+        List<QuizQuestionDTO> questionDTOs = selectedQuizzes.stream()
+                .map(this::mapToQuizQuestionDTO)
+                .toList();
+
+        return new CreatedQuizSetDTO(quizSetId, questionDTOs);
+    }
 
     private QuizQuestionDTO mapToQuizQuestionDTO(Quiz quiz) {
         // Assuming Quiz has methods like getId(), getQuestion(), getOptions()
@@ -111,14 +158,21 @@ public class QuizService {
     public static class CreatedQuizSetDTO {
         private Long quizSetId;
         private List<QuizQuestionDTO> questions;
+        private String redisQuizSetKey;
         // Constructor, Getters
         public CreatedQuizSetDTO(Long quizSetId, List<QuizQuestionDTO> questions) {
             this.quizSetId = quizSetId;
             this.questions = questions;
         }
+        public CreatedQuizSetDTO(Long quizSetId, List<QuizQuestionDTO> questions,String redisQuizSetKey) {
+            this.quizSetId = quizSetId;
+            this.questions = questions;
+            this.redisQuizSetKey = redisQuizSetKey;
+        }
         // getters...
         public Long getQuizSetId() { return quizSetId; }
         public List<QuizQuestionDTO> getQuestions() { return questions; }
+        public String getRedisQuizSetKey(){return redisQuizSetKey;}
     }
 
 
