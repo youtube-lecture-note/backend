@@ -87,12 +87,12 @@ public class SummaryController {
                             HttpStatus.INTERNAL_SERVER_ERROR, errorMessage, null));
                 });
     }
-    @GetMapping(value="/api/summary")
-    public ResponseEntity<?> getSummaryById(
-            @RequestParam Long videoId,
+    @GetMapping(value="/api/summary/{id}")
+    public ResponseEntity<ApiResponse<String>> getSummaryById(
+            @PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails
     ){
-        return ResponseEntity.ok(videoService.getVideoSummaryById(videoId));
+        return ApiResponse.<String>buildResponse(HttpStatus.OK, "성공", videoService.getVideoSummaryById(id));
     }
 
 //    @GetMapping(value="/api/summary/test")
