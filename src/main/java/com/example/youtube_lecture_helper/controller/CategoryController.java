@@ -42,12 +42,13 @@ public class CategoryController {
     @PostMapping
     public ResponseEntity<CategoryResponseDto> createCategory(
             @RequestBody CategoryRequestDto request,
-            @AuthenticationPrincipal User user // 인증된 사용자
+            @AuthenticationPrincipal UserDetails userDetails
     ) {
+        Long userId = ((CustomUserDetails) userDetails).getId();
         CategoryResponseDto response = categoryService.createCategory(
                 request.getName(),
                 request.getParentId(),
-                user.getId()
+                userId
         );
 
         return ResponseEntity.ok(response);
