@@ -14,5 +14,9 @@ public class VideoService {
         this.videoRepository = videoRepository;
     }
 
+    public String getVideoSummaryById(Long videoId){
+        return videoRepository.findById(videoId).orElseThrow(()->new RuntimeException("no video found for id"))
+                .getSummary();
+    }
 
 }
