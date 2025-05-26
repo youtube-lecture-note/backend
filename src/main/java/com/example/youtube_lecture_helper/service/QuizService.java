@@ -110,6 +110,7 @@ public class QuizService {
         // 5. Create Quiz Set
         QuizSet quizSet = new QuizSet();
         quizSet.setUser(user);
+        quizSet.setMultiVideo(false);
         quizSet.setAttemptTime(LocalDateTime.now());
         QuizSet savedQuizSet = quizSetRepository.save(quizSet); // Save to get the ID
 

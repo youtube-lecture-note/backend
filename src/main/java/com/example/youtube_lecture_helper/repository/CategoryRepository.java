@@ -14,4 +14,5 @@ public interface CategoryRepository extends JpaRepository<Category,Long> {
     List<Category> findByUserId(Long userId);
     @Query("select c.user.id from Category c where c.id = :id")
     Optional<Long> findOwnerIdById(@Param("id") Long id);
+    void deleteById(Long id);
 }

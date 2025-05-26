@@ -2,16 +2,10 @@ package com.example.youtube_lecture_helper.service;
 
 import com.example.youtube_lecture_helper.dto.CategoryResponseDto;
 import com.example.youtube_lecture_helper.dto.UserVideoInfoDto;
-import com.example.youtube_lecture_helper.entity.Category;
-import com.example.youtube_lecture_helper.entity.User;
-import com.example.youtube_lecture_helper.entity.UserVideoCategory;
-import com.example.youtube_lecture_helper.entity.Video;
+import com.example.youtube_lecture_helper.entity.*;
 import com.example.youtube_lecture_helper.exception.AccessDeniedException;
 import com.example.youtube_lecture_helper.exception.EntityNotFoundException;
-import com.example.youtube_lecture_helper.repository.CategoryRepository;
-import com.example.youtube_lecture_helper.repository.UserRepository;
-import com.example.youtube_lecture_helper.repository.UserVideoCategoryRepository;
-import com.example.youtube_lecture_helper.repository.VideoRepository;
+import com.example.youtube_lecture_helper.repository.*;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -25,6 +19,8 @@ public class CategoryService {
     private final UserVideoCategoryRepository userVideoCategoryRepository;
     private final VideoRepository videoRepository;
     private final UserRepository userRepository;
+    private final QuizSetRepository quizSetRepository;
+    private final QuizAttemptRepository quizAttemptRepository;
     public static final Long DEFAULT_CATEGORY_ID = 1L;
 
     public List<CategoryResponseDto> getAllCategoryHierarchyWithVideos(Long userId) {
@@ -229,11 +225,44 @@ public class CategoryService {
         Optional<UserVideoCategory> entryToRemove = userVideoCategoryRepository
                 .findByUserIdCategoryIdAndVideoId(userId, categoryId, video.getId());
 
+
         if (entryToRemove.isEmpty()) {
             throw new EntityNotFoundException("해당 카테고리에 비디오가 존재하지 않습니다.");
         }
 
+        List<QuizSet> deleteQuizSet = quizSetRepository.findAllByVideoAndUser(youtubeId,entryToRemove.get().getUser());
+        for(QuizSet quizSet : deleteQuizSet){
+            if(!quizSet.isMultiVideo()){
+                quizAttemptRepository.deleteByQuizSet(quizSet);
+                quizSetRepository.delete(quizSet);
+            }
+        }
         userVideoCategoryRepository.delete(entryToRemove.get());
     }
 
+    @Transactional
+    public void removeCategory(Long userId, Long categoryId){
+        Optional<Category> removeCategory = categoryRepository.findById(categoryId);
+        if(removeCategory.isEmpty()){
+            throw new EntityNotFoundException("해당하는 카테고리가 존재하지 않음");
+        }
+        if(!Objects.equals(removeCategory.get().getId(), userId)){
+            throw new AccessDeniedException("해당 동작을 실행할 권한이 없음");
+        }
+        List<QuizSet> deleteQuizSet = quizSetRepository.findValidQuizSetsByCategoryId(categoryId);
+        //CategoryId에 해당하는 영상Id의 사용자 퀴즈셋을 전부 찾아 다중 영상 퀴즈가 아닌 경우 전부 제거
+        for(QuizSet quizSet : deleteQuizSet){
+            if(!quizSet.isMultiVideo()){
+                quizAttemptRepository.deleteByQuizSet(quizSet);
+                quizSetRepository.delete(quizSet);
+            }
+        }
+        //유저가 저장한 비디오 정보 삭제.
+        List<UserVideoCategory> entry = userVideoCategoryRepository.findByCategoryId(categoryId);
+
+        for(UserVideoCategory video : entry){
+            userVideoCategoryRepository.delete(video);
+        }
+        categoryRepository.delete(removeCategory.get());
+    }
 }

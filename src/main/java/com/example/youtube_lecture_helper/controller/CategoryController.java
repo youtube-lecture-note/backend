@@ -121,4 +121,16 @@ public class CategoryController {
         categoryService.removeVideoFromCategory(userId, videoId, categoryId);
         return ResponseEntity.noContent().build();
     }
+
+    /*
+    * 카테고리 제거
+    * */
+    @DeleteMapping("/{categoryId}")
+    public ResponseEntity<Void> removeCategory(
+            @PathVariable Long categoryId,
+            @AuthenticationPrincipal UserDetails userDetails){
+        Long userId = ((CustomUserDetails) userDetails).getId();
+        categoryService.removeCategory(userId,categoryId);
+        return ResponseEntity.noContent().build();
+    }
 }
