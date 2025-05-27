@@ -113,14 +113,6 @@ public class CategoryController {
         categoryService.removeVideoFromCategory(userId, videoId, categoryId);
         return ResponseEntity.noContent().build();
     }
-    @DeleteMapping("/{categoryId}/videos/{videoId}/test")
-    public ResponseEntity<Void> removeVideoFromCategoryTest(
-            @PathVariable Long categoryId,
-            @PathVariable String videoId) {
-        Long userId = 1L;
-        categoryService.removeVideoFromCategory(userId, videoId, categoryId);
-        return ResponseEntity.noContent().build();
-    }
 
     /*
     * 카테고리 제거
@@ -131,6 +123,20 @@ public class CategoryController {
             @AuthenticationPrincipal UserDetails userDetails){
         Long userId = ((CustomUserDetails) userDetails).getId();
         categoryService.removeCategory(userId,categoryId);
+        return ResponseEntity.noContent().build();
+    }
+    
+    //카테고리 이동
+    @PutMapping("/{fromCategoryId}/videos/{videoId}/move/{toCategoryId}")
+    public ResponseEntity<Void> moveVideoToAnotherCategory(
+            @PathVariable Long fromCategoryId,
+            @PathVariable String videoId,
+            @PathVariable Long toCategoryId,
+            @RequestParam(required = false) String userVideoName,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        Long userId = ((CustomUserDetails) userDetails).getId();
+        categoryService.removeVideoFromCategory(userId, videoId, fromCategoryId);
+        categoryService.addVideoToCategory(userId, videoId, toCategoryId, userVideoName);
         return ResponseEntity.noContent().build();
     }
 }
