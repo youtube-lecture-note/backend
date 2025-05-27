@@ -3,9 +3,6 @@ package com.example.youtube_lecture_helper.entity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
-import org.springframework.stereotype.Service;
-
-import javax.annotation.Nullable;
 
 @Entity
 @Getter @Setter
@@ -19,7 +16,7 @@ public class Category {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id", nullable = true)
-    private Category parentId;
+    private Category parent;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")

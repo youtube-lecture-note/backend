@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -24,29 +25,28 @@ public class CategoryService {
     public static final Long DEFAULT_CATEGORY_ID = 1L;
 
     public List<CategoryResponseDto> getAllCategoryHierarchyWithVideos(Long userId) {
-        // 루트 카테고리만 먼저 조회
-        List<Category> rootCategories = categoryRepository.findByParentIdIsNull();
+        // 유저 소유 + 공용 카테고리 한 번에 조회
+        List<Category> allCategories = categoryRepository.findByUserIdOrIsPublic(userId);
 
-        // 모든 카테고리들의 계층 구조를 만들기
+        // parentId를 기준으로 그룹화
+        Map<Long, List<Category>> parentIdMap = allCategories.stream()
+                .collect(Collectors.groupingBy(c -> c.getParent() == null ? null : c.getParent().getId()));
+
+        // 루트 카테고리 (parent == null)
+        List<Category> rootCategories = parentIdMap.get(null);
+
         List<CategoryResponseDto> result = new ArrayList<>();
-        for (Category rootCategory : rootCategories) {
-            CategoryResponseDto rootDto = buildCategoryHierarchy(rootCategory);
-            // 해당 유저의 카테고리인 경우만 추가
-            if (rootCategory.getUser() == null || rootCategory.getUser().getId().equals(userId)) {
-                result.add(rootDto);
+        if (rootCategories != null) {
+            for (Category root : rootCategories) {
+                result.add(buildHierarchy(root, parentIdMap));
             }
         }
 
-        // 모든 카테고리 ID 추출
+        // 계층에서 모든 카테고리 ID 수집
         List<Long> allCategoryIds = getAllCategoryIds(result);
 
-        // 비어있지 않은 경우만 조회 수행
         if (!allCategoryIds.isEmpty()) {
-            // 모든 카테고리의 비디오 정보를 한 번에 조회
-            List<UserVideoCategory> allVideos = userVideoCategoryRepository
-                    .findByCategoryIdsWithVideo(allCategoryIds);
-
-            // 비디오 정보를 각 카테고리 DTO에 할당
+            List<UserVideoCategory> allVideos = userVideoCategoryRepository.findByCategoryIdsWithVideo(allCategoryIds);
             mapVideosToCategories(result, allVideos, userId);
         }
 
@@ -56,14 +56,14 @@ public class CategoryService {
     /**
      * 특정 카테고리와 그 하위 카테고리의 계층 구조를 재귀적으로 구성
      */
-    private CategoryResponseDto buildCategoryHierarchy(Category category) {
+    private CategoryResponseDto buildHierarchy(Category category, Map<Long, List<Category>> parentIdMap) {
         CategoryResponseDto dto = new CategoryResponseDto(category);
-
-        List<Category> childCategories = categoryRepository.findByParentId(category);
-        for (Category child : childCategories) {
-            dto.getChildren().add(buildCategoryHierarchy(child));
+        List<Category> children = parentIdMap.get(category.getId());
+        if (children != null) {
+            for (Category child : children) {
+                dto.getChildren().add(buildHierarchy(child, parentIdMap));
+            }
         }
-
         return dto;
     }
 
@@ -156,7 +156,7 @@ public class CategoryService {
         if (parentId != null) {
             Category parent = categoryRepository.findById(parentId)
                     .orElseThrow(() -> new IllegalArgumentException("Parent category not found: " + parentId));
-            category.setParentId(parent);
+            category.setParent(parent);
         }
 
         return new CategoryResponseDto(categoryRepository.save(category));
