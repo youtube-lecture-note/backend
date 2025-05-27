@@ -4,6 +4,7 @@ import com.example.youtube_lecture_helper.dto.QuizAttemptDto;
 import com.example.youtube_lecture_helper.dto.QuizHistorySummaryDto;
 import com.example.youtube_lecture_helper.dto.QuizAttemptWithAnswerDto;
 import com.example.youtube_lecture_helper.entity.QuizAttempt;
+import com.example.youtube_lecture_helper.entity.QuizSet;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -97,6 +98,5 @@ public interface QuizAttemptRepository  extends JpaRepository<QuizAttempt,Long> 
             "ORDER BY qa.id ASC")
     List<QuizAttemptWithAnswerDto> findDetailedAttemptsWithAnswersByQuizSetId(@Param("quizSetId") Long quizSetId);
 
-
-
+    void deleteByQuizSet(QuizSet quizSet);
 }

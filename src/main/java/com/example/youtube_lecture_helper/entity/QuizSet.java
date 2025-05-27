@@ -21,6 +21,8 @@ public class QuizSet {
     @JoinColumn(name = "user_id")
     private User user;
 
+    private boolean isMultiVideo;
+
     @Column(name = "attempt_time")
     private LocalDateTime attemptTime;
     public void setUser(User user){
@@ -35,4 +37,5 @@ public class QuizSet {
         attempts.add(attempt);
         attempt.setQuizSet(this);
     }
+
 }

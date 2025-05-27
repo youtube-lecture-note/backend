@@ -33,12 +33,15 @@ public class CopyrightService {
     @Transactional
     public String banVideo(String videoId,String owner){
         Ban banned = new Ban(videoId,owner);
-        try{
-            return banRepository.save(banned).getYoutubeId();
-        } catch (DataIntegrityViolationException e) {
+        Optional<Ban> check = banRepository.findByYoutubeId(videoId);
+        if(!check.isEmpty()){
             return "이미 차단된 영상입니다.";
-        } catch(Exception e){
-            return "처리 중 오류 발생. 다시 시도해주세요.";
+        } else{
+            try{
+                return banRepository.save(banned).getYoutubeId();
+            } catch(Exception e){
+                return "처리 중 오류 발생. 다시 시도해주세요.";
+            }
         }
     }
 }
