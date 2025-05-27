@@ -30,10 +30,10 @@ public class CategoryService {
 
         // parentId를 기준으로 그룹화
         Map<Long, List<Category>> parentIdMap = allCategories.stream()
-                .collect(Collectors.groupingBy(c -> c.getParent() == null ? null : c.getParent().getId()));
+                .collect(Collectors.groupingBy(c -> c.getParent() == null ? -1L : c.getParent().getId()));
 
         // 루트 카테고리 (parent == null)
-        List<Category> rootCategories = parentIdMap.get(null);
+        List<Category> rootCategories = parentIdMap.get(-1L);
 
         List<CategoryResponseDto> result = new ArrayList<>();
         if (rootCategories != null) {
@@ -246,7 +246,7 @@ public class CategoryService {
         if(removeCategory.isEmpty()){
             throw new EntityNotFoundException("해당하는 카테고리가 존재하지 않음");
         }
-        if(!Objects.equals(removeCategory.get().getId(), userId)){
+        if(!Objects.equals(removeCategory.get().getUser().getId(), userId)){
             throw new AccessDeniedException("해당 동작을 실행할 권한이 없음");
         }
         List<QuizSet> deleteQuizSet = quizSetRepository.findValidQuizSetsByCategoryId(categoryId);
