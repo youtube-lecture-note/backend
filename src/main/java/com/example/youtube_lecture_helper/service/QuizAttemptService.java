@@ -14,6 +14,7 @@ import com.example.youtube_lecture_helper.dto.QuizHistorySummaryDto;
 import com.example.youtube_lecture_helper.repository.QuizAttemptRepository;
 import com.example.youtube_lecture_helper.repository.QuizRepository;
 import com.example.youtube_lecture_helper.repository.QuizSetRepository;
+import com.example.youtube_lecture_helper.repository.QuizSetMultiRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,6 +36,7 @@ public class QuizAttemptService {
     private final QuizAttemptRepository quizAttemptRepository;
     private final QuizRepository quizRepository;
     private final QuizSetRepository quizSetRepository;
+    private final QuizSetMultiRepository quizSetMultiRepository;
     private final ReactiveGptClient reactiveGptClient;
 
 
@@ -164,9 +166,9 @@ public class QuizAttemptService {
         }
         
         QuizSet quizSet = quizSetOpt.get();
-        
         // 멀티 퀴즈인 경우
-        if (Boolean.TRUE.equals(quizSet.isMultiVideo())) {
+        boolean isMultiQuiz = quizSetMultiRepository.existsByQuizSetId(quizSetId);
+        if (isMultiQuiz) {
             // 해당 사용자가 실제로 이 퀴즈를 시도했는지 확인
             return quizAttemptRepository.existsByQuizSetIdAndUserId(quizSetId, currentUserId);
         } else {

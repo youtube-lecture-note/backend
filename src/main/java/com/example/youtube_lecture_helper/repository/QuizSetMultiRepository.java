@@ -7,4 +7,5 @@ import java.util.List;
 
 public interface QuizSetMultiRepository extends JpaRepository<QuizSetMulti,Long> {
     List<QuizSetMulti> findByQuizSetId(Long quizSetId);
+    boolean existsByQuizSetId(Long quizSetId);
 }

@@ -25,7 +25,7 @@ public interface QuizAttemptRepository  extends JpaRepository<QuizAttempt,Long> 
             "JOIN qa.quiz q " +
             "JOIN Video v ON q.youtubeId = v.youtubeId " +
             "LEFT JOIN UserVideoCategory uvc ON uvc.video.id = v.id AND uvc.user.id = qs.user.id " +
-            "WHERE qs.user.id = :userId " +
+            "WHERE (qs.user.id = :userId OR qa.user.id = :userId) " +
             "GROUP BY v.youtubeId, uvc.userVideoName, v.id, qs.attemptTime, qs.id " +
             "ORDER BY qs.attemptTime DESC")
     List<QuizHistorySummaryDto> findQuizSetSummariesByUserId(@Param("userId") Long userId);
