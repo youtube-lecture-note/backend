@@ -53,7 +53,7 @@ public class QuizAttemptService {
     public List<QuizAttemptWithAnswerDto> getQuizAttemptDetails(Long quizSetId,Long userId) {
         QuizSet quizSet = quizSetRepository.findById(quizSetId)
                 .orElseThrow(() -> new QuizSetNotFoundException("QuizSet not found with id: " + quizSetId));
-        if (!quizSet.getUser().getId().equals(userId)) {
+        if (!canAccessQuizRecord(quizSetId,userId)) {
             throw new AccessDeniedException("You don't have permission to access this quiz set");
         }
         return quizAttemptRepository.findDetailedAttemptsWithAnswersByQuizSetId(quizSetId);
@@ -154,6 +154,25 @@ public class QuizAttemptService {
                                         .collectList();
                             });
                 });
+    }
+
+    public boolean canAccessQuizRecord(Long quizSetId, Long currentUserId) {
+        Optional<QuizSet> quizSetOpt = quizSetRepository.findById(quizSetId);
+        
+        if (quizSetOpt.isEmpty()) {
+            return false;
+        }
+        
+        QuizSet quizSet = quizSetOpt.get();
+        
+        // 멀티 퀴즈인 경우
+        if (Boolean.TRUE.equals(quizSet.isMultiVideo())) {
+            // 해당 사용자가 실제로 이 퀴즈를 시도했는지 확인
+            return quizAttemptRepository.existsByQuizSetIdAndUserId(quizSetId, currentUserId);
+        } else {
+            // 일반 퀴즈인 경우 소유자만 접근 가능
+            return quizSet.getUser().getId().equals(currentUserId);
+        }
     }
 
     private QuizAttemptDto toDto(QuizAttempt attempt) {

@@ -7,11 +7,11 @@ import lombok.Setter;
 @Getter
 @Setter
 public class UserVideoInfoDto {
-    private Long videoId;
+    private String videoId;
     private String userVideoName;
 
     public UserVideoInfoDto(UserVideoCategory userVideoCategory) {
-        this.videoId = userVideoCategory.getVideo().getId();
+        this.videoId = userVideoCategory.getVideo().getYoutubeId();
         this.userVideoName = userVideoCategory.getUserVideoName();
     }
 }

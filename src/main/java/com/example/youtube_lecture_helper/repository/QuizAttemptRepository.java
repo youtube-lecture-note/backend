@@ -99,4 +99,8 @@ public interface QuizAttemptRepository  extends JpaRepository<QuizAttempt,Long> 
     List<QuizAttemptWithAnswerDto> findDetailedAttemptsWithAnswersByQuizSetId(@Param("quizSetId") Long quizSetId);
 
     void deleteByQuizSet(QuizSet quizSet);
+
+    List<QuizAttempt> findByQuizSetId(Long quizSetId);
+    List<QuizAttempt> findByUserId(Long userId);
+    boolean existsByQuizSetIdAndUserId(Long quizSetId, Long userId);
 }

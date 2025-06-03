@@ -39,4 +39,6 @@ public interface QuizSetRepository extends JpaRepository<QuizSet,Long> {
             @Param("youtubeId") String youtubeId,
             @Param("user") User user
     );
+    List<QuizSet> findByUserId(Long userId);
+    List<QuizSet> findByIsMultiVideo(Boolean isMultiVideo);
 }
