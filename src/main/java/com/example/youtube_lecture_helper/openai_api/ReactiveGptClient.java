@@ -229,20 +229,18 @@ public class ReactiveGptClient {
                 .flatMap(this::getSummaryBySubtitleChunkReactive) // Call OpenAI for each chunk
                 .collectList() // Collect all summary parts
                 .map(summaries -> {
-                    // Step 3: Check results and combine
-                    for (String summary : summaries) {
-                        if (summary == null) { // Check for null results from API errors
-                            log.warn("Received null summary part, treating as potential lecture content issue.");
-                            // Decide how to handle nulls - here assuming it might indicate non-lecture
-                            return new SummaryResult(SummaryStatus.NOT_LECTURE, null);
-                        }
-                        if (summary.trim().equals("-1")) {
-                            log.info("Detected '-1' response, indicating non-lecture content.");
-                            return new SummaryResult(SummaryStatus.NOT_LECTURE, null);
-                        }
+                    // null 또는 -1이 아닌 요약만 필터링
+                    List<String> validSummaries = summaries.stream()
+                        .filter(s -> s != null && !s.trim().equals("-1") && !s.isBlank())
+                        .collect(Collectors.toList());
+
+                    // 모든 청크가 -1 또는 null/blank라면 실패
+                    if (validSummaries.isEmpty()) {
+                        return new SummaryResult(SummaryStatus.NOT_LECTURE, null);
                     }
-                    // Combine valid summary parts
-                    String combinedSummary = String.join("\n\n", summaries);
+
+                    // 일부만 -1이면 유효한 것만 합쳐서 반환
+                    String combinedSummary = String.join("\n\n", validSummaries);
                     return new SummaryResult(SummaryStatus.SUCCESS, combinedSummary);
                 })
                 .onErrorResume(e -> {
@@ -401,59 +399,22 @@ public class ReactiveGptClient {
     // (Keep your existing prompt generation methods)
 
     private String generateSummarySystemPrompt() {
-        return "You are an AI assistant that summarizes lecture content into concise notes. " +
-                "Each input data consists of time(second) and content. " +
-                "If the input is not related to a lecture or knowledge-based topic, return \"-1\" instead of a summary. " +
-                "If it IS a lecture video, provide a structured summary of the content. " +
-                "If the provided subtitles are not in Korean, translate them into Korean before summarizing. " +
-                "Each summary consists of a title and content. " +
-                "Format the summary with appropriate line breaks, grouping related ideas into separate sections or bullet points. " +
-                "Each point should contain a brief, clear statement of the idea discussed in the lecture, and should be formatted in a way " +
-                "that would resemble lecture notes taken by a student. " +
-                "The start time (in seconds) should be included at the beginning of the title, formatted as '<time; title>' without extra text. " +
-                "Time intervals should be dynamically adjusted based on content changes " +
-                "No time should be included in the content. " +
-                "The summary should resemble a bullet-point list of key ideas and should use concise phrasing typical of lecture notes.";
-    }
-
-    private String generateQuizSystemPrompt(QuizType type) {
-        if (type == QuizType.MULTIPLE_CHOICE) {
-            return "You are an educational quiz generator who communicates in Korean. " +
-                    "Create quizzes question strictly based on the information provided in lecutre summaries. " +
-                    "Focus on the key points and important ideas. Avoid questions about trivial or overly detailed information. " +
-                    "Do not use any external knowledge or assumptions beyond what is explicitly stated in the input content. " +
-                    "Each question must be based on the lecture content and logically inferable from the provided information, ensuring it aligns with the main themes and concepts discussed. " +
-                    "Provide four answer choices, including one correct answer and three plausible but incorrect options. " +
-                    "The question should test conceptual understanding rather than just memorization. "+
-                    "And give timestamps corresponding to each question" +
-                    "Generate a quiz in the following format without numbering:\n" +
-                    "[Question];[1. Option 1];[2. Option 2];[3. Option 3];[4. Option 4];[Answer Option Number];[Explanation of the correct answer];[timestamp]\n" +
-                    "Example: " + "What does a molecular formula represent?;It represents the properties of an atom.;It represents the types and numbers of atoms in a molecule.;It represents the state of a substance.;It represents the result of a chemical reaction.;2;분자식은 분자 내 원자의 종류와 수를 나타냅니다.;10\n" +
-                    "양이온이란 무엇인가?;전자를 잃고 양전하를 띄는 이온이다.;전자를 얻고 음전하를 띄는 이온이다.;전자와 양성자의 수가 같은 이온이다.;전자가 없는 이온이다.;1;양이온은 원자가 전자를 잃어 양전하를 갖게 된 입자입니다.;250"; // Example output should also be in Korean if the generator communicates in Korean
-        } else if (type == QuizType.SHORT_ANSWER) {
-            return "You are an educational quiz generator who communicates in Korean. " +
-                    "Generate **short answer questions** from the following lecture summary. " +
-                    "Generate only as many questions as are necessary to cover the key conceptual points in the lecture summary. " +
-                    "Each question must be based solely on the lecture content and be logically inferable from it—do not use external knowledge. " +
-                    "Avoid questions that test rote memorization or trivial details. Focus on questions that assess **understanding and reasoning**.\n\n" +
-
-                    "난이도는 다음 기준에 따라 부여하세요:\n" +
-                    "- 난이도 1 (쉬움): 기본 개념, 정의, 용어를 직접적으로 묻는 문제\n" +
-                    "- 난이도 2 (보통): 개념 간의 관계, 비교, 간단한 추론이나 응용을 요구하는 문제\n" +
-                    "- 난이도 3 (어려움): 복합 개념 적용, 고차원적 사고, 간접적 추론을 포함한 문제\n" +
-                    "- 난이도 1과 2가 모호하게 겹칠 경우 둘 중 하나는 생략해도 좋습니다.\n\n" +
-
-                    "각 문항은 다음 형식으로 한 줄로 출력해주세요:\n" +
-                    "[Question];[Correct Answer];[Explanation of the correct answer];[Timestamp in seconds];[Difficulty Level (1~3)]\n\n" +
-
-                    "예시:\n" +
-                    "적혈구의 주요 기능은 무엇인가?;몸 전체에 산소를 운반하는 것.;적혈구는 헤모글로빈을 함유하고 있어 폐에서 산소와 결합하여 몸 전체의 조직으로 운반합니다.;240;1\n" +
-                    "파동함수의 절댓값 제곱이 물리적으로 어떤 의미를 가지며, 이를 통해 얻을 수 있는 예측은 무엇인가?;입자의 위치 확률 분포를 나타내며, 특정 구간에 존재할 확률을 계산할 수 있다.;파동함수의 절댓값 제곱은 해당 위치에서 입자를 발견할 확률 밀도를 의미하므로, 이를 통해 입자의 위치 예측이 가능합니다.;1802;2\n\n" +
-
-                    "⚠️ Examples of what NOT to do (for reference only — do NOT copy these):\n" +
-                    "- Bad (rote recall): 막스 보른은 슈레딩거 방정식에서 어떤 기여를 했는가?;파동 함수의 절댓값 제곱을 확률 해석에 도입했다.;막스 보른은 파동 함수의 물리적 의미를 확률적으로 해석하는 데 기여했습니다.;1802;1";
-        }
-        return "";
+    return "You are an AI assistant that summarizes lecture videos into concise, structured notes.\n"
+         + "Each input consists of timestamped subtitles in the format: time (in seconds) and corresponding text.\n"
+         + "Your task is to identify and summarize only the parts of the video that are related to lectures or knowledge-based topics.\n"
+         + "If a section is not part of a lecture (e.g., unrelated conversation, advertisements, casual chatter), ignore it.\n"
+         + "If none of the input is related to a lecture, return \"-1\".\n"
+         + "If the subtitles are not in Korean, translate them into Korean before summarizing.\n"
+         + "If the subtitles contain awkward or unnatural Korean expressions, correct them to natural, fluent Korean.\n"
+         + "If an English word or phrase is much more natural or commonly used than its Korean equivalent, use the English word as is in the summary.\n"
+         + "If a proper noun (such as a person's name or place) is mistranslated or misspelled, correct it to the most contextually accurate and widely accepted form in Korean.\n"
+         + "For valid lecture content:\n"
+         + "Create a structured summary that resembles student lecture notes.\n"
+         + "Use concise, clear phrasing, and group related ideas using appropriate line breaks or bullet points.\n"
+         + "Each summary section must begin with the start time (in seconds) formatted as: \"<time; title>\" — no extra text.\n"
+         + "Do not include time information inside the content.\n"
+         + "Adjust the summary segmentation dynamically based on topic changes.\n"
+         + "The final summary should look like a well-organized note, with bullet points capturing the core ideas of each lecture section.";
     }
 
     private String generateQuizSystemPromptByDifficulty(QuizType type) {
@@ -468,6 +429,7 @@ public class ReactiveGptClient {
                     "- 난이도 1 (쉬움): 정의, 용어, 핵심 개념 등 기본적인 내용을 묻는 문제\n" +
                     "- 난이도 2 (보통): 개념 간 관계, 간단한 응용, 비교 등 논리적 이해를 요하는 문제\n" +
                     "- 난이도 3 (어려움): 복합적인 추론, 고차원적 사고, 깊이 있는 응용 문제\n\n" +
+                    "각 난이도(1, 2, 3)별로 문제의 개수가 최대한 균형을 이루도록 생성해주세요.\n\n" +
 
                     "각 문제는 정확하게 다음 형식으로 작성해주세요. 줄바꿈 없이 한 줄로 출력하며, 숫자나 항목 앞에는 불필요한 마크업 없이:\n" +
                     "[Question];[1. Option 1];[2. Option 2];[3. Option 3];[4. Option 4];[Answer Option Number];[Explanation of correct answer];[Timestamp in seconds];[Difficulty Level 1~3]\n\n" +
@@ -483,12 +445,13 @@ public class ReactiveGptClient {
                     "Generate only as many questions as are necessary to cover the key conceptual points in the lecture summary. " +
                     "Each question must be based solely on the lecture content and be logically inferable from it—do not use external knowledge. " +
                     "Avoid questions that test rote memorization or trivial details. Focus on questions that assess **understanding and reasoning**.\n\n" +
-
+                
                     "난이도는 다음 기준에 따라 부여하세요:\n" +
                     "- 난이도 1 (쉬움): 기본 개념, 정의, 용어를 직접적으로 묻는 문제\n" +
                     "- 난이도 2 (보통): 개념 간의 관계, 비교, 간단한 추론이나 응용을 요구하는 문제\n" +
                     "- 난이도 3 (어려움): 복합 개념 적용, 고차원적 사고, 간접적 추론을 포함한 문제\n" +
                     "- 난이도 1과 2가 모호하게 겹칠 경우 둘 중 하나는 생략해도 좋습니다.\n\n" +
+                    "각 난이도(1, 2, 3)별로 문제의 개수가 최대한 균형을 이루도록 생성해주세요.\n\n" +
 
                     "각 문항은 다음 형식으로 한 줄로 출력해주세요:\n" +
                     "[Question];[Correct Answer];[Explanation of the correct answer];[Timestamp in seconds];[Difficulty Level (1~3)]\n\n" +
