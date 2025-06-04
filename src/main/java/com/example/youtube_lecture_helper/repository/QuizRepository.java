@@ -23,4 +23,6 @@ public interface QuizRepository extends JpaRepository<Quiz,Long> {
 
     @Query("SELECT q FROM Quiz q WHERE q.id IN :ids")
     List<Quiz> findAllByIdIn(@Param("ids") List<Long> ids);
+
+    List<Quiz> findAllByYoutubeId(String youtubeId);
 }

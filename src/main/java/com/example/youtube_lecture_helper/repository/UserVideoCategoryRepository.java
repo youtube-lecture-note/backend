@@ -35,10 +35,12 @@ public interface UserVideoCategoryRepository extends JpaRepository<UserVideoCate
 
     @Query("SELECT uvc FROM UserVideoCategory uvc " +
             "JOIN FETCH uvc.video " +
-            "WHERE uvc.category.id IN :categoryIds")
+            "WHERE uvc.category.id IN :categoryIds and uvc.visible = true")
     List<UserVideoCategory> findByCategoryIdsWithVideo(List<Long> categoryIds);
 
     List<UserVideoCategory> findByUserIdAndCategoryId(Long userId, Long categoryId);
 
     Optional<UserVideoCategory> findByUserIdAndVideoId(Long userId, Long videoId);
+
+    void deleteByVideoId(Long videoId);
 }

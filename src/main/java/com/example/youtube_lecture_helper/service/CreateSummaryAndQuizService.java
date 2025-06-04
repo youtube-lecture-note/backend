@@ -4,8 +4,10 @@ import com.example.youtube_lecture_helper.SummaryStatus;
 import com.example.youtube_lecture_helper.entity.Video;
 import com.example.youtube_lecture_helper.openai_api.*;
 import com.example.youtube_lecture_helper.entity.Quiz;
+import com.example.youtube_lecture_helper.entity.Ban;
 import com.example.youtube_lecture_helper.repository.QuizRepository;
 import com.example.youtube_lecture_helper.repository.VideoRepository;
+import com.example.youtube_lecture_helper.repository.BanRepository;
 import com.example.youtube_lecture_helper.event.VideoProcessedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,6 +18,7 @@ import reactor.core.publisher.SignalType;
 
 
 import java.time.Duration;
+import java.util.Optional;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -31,33 +34,39 @@ public class CreateSummaryAndQuizService {
     private final YoutubeSubtitleExtractor youtubeSubtitleExtractor;
     private final VideoRepository videoRepository;
     private final QuizRepository quizRepository;
+    private final BanRepository banRepository;
     private final ApplicationEventPublisher eventPublisher;
 
     private final ConcurrentHashMap<String, Mono<SummaryResult>> processingCache = new ConcurrentHashMap<>();
     
-    //video 존재하는지 검색 후에 호출
+    //video 밴 리스트에 없음 + videoRepo에 이미 존재하는지 검색 후 호출
     public Mono<SummaryResult> initiateVideoProcessing(Long userId, String videoId, String language) {
         log.info("Request received to process videoId: {}", videoId);
 
-        // Step 1: Check Database for existing *summary* only first.
-        return checkDatabaseForExistingSummary(videoId)
-                .switchIfEmpty(Mono.defer(() -> {
-                    // Step 2: Check in-memory cache / Start summary generation if needed
-                    log.debug("No summary in DB for videoId: {}. Checking active processing cache.", videoId);
-                    // Use computeIfAbsent to ensure summary generation starts only once concurrently.
-                    // The cached value is the Mono representing the summary generation task.
-                    return processingCache.computeIfAbsent(videoId, key -> {
-                        log.info("No active processing found for videoId: {}. Starting summary generation.", key);
-                        return generateSummaryAndTriggerQuizProcessing(userId, key, language)
-                                .doFinally(signal -> {
-                                    // Remove from cache once summary generation completes or fails.
-                                    // Background quiz task continues independently.
-                                    log.info("Summary processing signal {} for videoId: {}. Removing from active cache.", signal, key);
-                                    processingCache.remove(key);
-                                })
-                                .cache(); // Cache the result of summary generation
-                    });
-                }));
+        // Step 0: Ban 체크
+        return checkIfBanned(videoId)
+            .flatMap(banOpt -> {
+                if (banOpt.isPresent()) {
+                    log.warn("VideoId {} is banned. Skipping summary.", videoId);
+                    // 금지된 영상이면 바로 결과 반환 (원하는 메시지/상태로)
+                    return Mono.just(new SummaryResult(SummaryStatus.BANNED, "This video is banned."));
+                }
+                // Step 1: Summary DB 체크
+                return checkDatabaseForExistingSummary(videoId)
+                    .switchIfEmpty(Mono.defer(() -> {
+                        // Step 2: 캐시/요약 생성
+                        log.debug("No summary in DB for videoId: {}. Checking active processing cache.", videoId);
+                        return processingCache.computeIfAbsent(videoId, key -> {
+                            log.info("No active processing found for videoId: {}. Starting summary generation.", key);
+                            return generateSummaryAndTriggerQuizProcessing(userId, key, language)
+                                    .doFinally(signal -> {
+                                        log.info("Summary processing signal {} for videoId: {}. Removing from active cache.", signal, key);
+                                        processingCache.remove(key);
+                                    })
+                                    .cache();
+                        });
+                    }));
+            });
     }
 
     /**
@@ -254,6 +263,15 @@ public class CreateSummaryAndQuizService {
         } else {
             log.info("Background task: No quizzes generated or found to save for videoId: {}", videoId);
         }
+    }
+    //요약 요청하기 전 밴 된 영상인지 먼저 확인하기
+    private Mono<Optional<Ban>> checkIfBanned(String videoId) {
+        return Mono.fromCallable(() -> {
+                log.debug("Checking ban status for videoId: {}", videoId);
+                // blocking call
+                return banRepository.findByYoutubeId(videoId); // Optional<Ban>
+            })
+            .subscribeOn(Schedulers.boundedElastic());
     }
 
     private void publishVideoSavedEvent(String youtubeId, Long userId, String title) {

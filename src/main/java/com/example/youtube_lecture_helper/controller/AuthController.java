@@ -20,13 +20,9 @@ import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.gson.GsonFactory;
 import com.example.youtube_lecture_helper.entity.User;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
-
-import java.util.Collections;
-import java.util.List;
-import java.util.stream.Collectors;
-import java.util.Arrays;
-import java.util.Optional;
+import java.util.*;
 
 
 @RestController
@@ -95,11 +91,9 @@ public class AuthController {
             if (cookies == null) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
             }
-            System.out.println("Hello World!");
             Optional<Cookie> jwtCookie = Arrays.stream(cookies)
                     .filter(cookie -> "accessToken".equals(cookie.getName()))
                     .findFirst();
-            System.out.println("Hello World2!");
             if (jwtCookie.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
             }
@@ -119,6 +113,15 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
+    @GetMapping("/check-admin")
+    public ResponseEntity<?> checkAdmin(@AuthenticationPrincipal CustomUserDetails userDetails) {
+        boolean isAdmin = userDetails.getAuthorities().stream()
+            .anyMatch(auth -> "ROLE_ADMIN".equals(auth.getAuthority()) || "ADMIN".equals(auth.getAuthority()));
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("isAdmin", isAdmin);
+        return ResponseEntity.ok(result);
+    }
 
     @PostMapping("/logout")
     public ResponseEntity<?> logout(HttpServletResponse response) {
@@ -126,6 +129,8 @@ public class AuthController {
         response.addCookie(cookie);
         return ResponseEntity.ok("Logged out successfully");
     }
+
+
 
     // GoogleTokenRequest DTO
     static class GoogleTokenRequest {

@@ -5,6 +5,7 @@ import com.example.youtube_lecture_helper.dto.QuizHistorySummaryDto;
 import com.example.youtube_lecture_helper.dto.QuizAttemptWithAnswerDto;
 import com.example.youtube_lecture_helper.entity.QuizAttempt;
 import com.example.youtube_lecture_helper.entity.QuizSet;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -98,9 +99,26 @@ public interface QuizAttemptRepository  extends JpaRepository<QuizAttempt,Long> 
             "ORDER BY qa.id ASC")
     List<QuizAttemptWithAnswerDto> findDetailedAttemptsWithAnswersByQuizSetId(@Param("quizSetId") Long quizSetId);
 
-    void deleteByQuizSet(QuizSet quizSet);
-
     List<QuizAttempt> findByQuizSetId(Long quizSetId);
     List<QuizAttempt> findByUserId(Long userId);
     boolean existsByQuizSetIdAndUserId(Long quizSetId, Long userId);
+    @Query("""
+        select case when count(qa) > 0 then true else false end
+        from QuizAttempt qa
+        join qa.quiz q
+        where qa.user.id = :userId
+        and q.youtubeId = :youtubeId
+        """)
+    boolean existsByUserIdAndQuizYoutubeId(@Param("userId") Long userId, @Param("youtubeId") String youtubeId);
+    
+    void deleteByQuizSetId(Long quizSetId);
+    void deleteByQuizSet(QuizSet quizSet);
+
+    @Modifying
+    @Query("DELETE FROM QuizAttempt qa WHERE qa.quiz.id = :quizId AND qa.quizSet.id = :quizSetId")
+    void deleteByQuizIdAndQuizSetId(@Param("quizId") Long quizId, @Param("quizSetId") Long quizSetId);
+
+    @Modifying
+    @Query("DELETE FROM QuizAttempt qa WHERE qa.quiz.id = :quizId")
+    void deleteByQuizId(@Param("quizId") Long quizId);
 }

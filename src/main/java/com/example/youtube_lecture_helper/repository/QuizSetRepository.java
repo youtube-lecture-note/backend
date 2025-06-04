@@ -41,4 +41,12 @@ public interface QuizSetRepository extends JpaRepository<QuizSet,Long> {
     );
     List<QuizSet> findByUserId(Long userId);
     List<QuizSet> findByIsMultiVideo(Boolean isMultiVideo);
+    @Query("""
+        select qs 
+        from QuizSet qs 
+        join QuizSetMulti qsm on qs = qsm.quizSet
+        where qsm.quiz.id = :quizId
+    """)
+    List<QuizSet> findAllByQuizId(@Param("quizId") Long quizId);
+
 }

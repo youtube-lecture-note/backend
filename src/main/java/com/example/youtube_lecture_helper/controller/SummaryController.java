@@ -69,6 +69,11 @@ public class SummaryController {
                             yield Mono.just(ApiResponse.<String>buildResponse(
                                     HttpStatus.BAD_REQUEST, "강의 영상 아님", null));
                         }
+                        case BANNED -> {
+                            log.warn("Summary generation failed for videoId: {}. Reason: BANNED video: ", videoId);
+                            yield Mono.just(ApiResponse.<String>buildResponse(
+                                    HttpStatus.BAD_REQUEST, "저작권 처리 요청 들어온 영상", null));
+                        }
                         case FAILED, PROCESSING -> {
                             log.warn("Summary generation failed or is still processing for videoId: {}. Status: {}",
                                     videoId, summaryResult.getStatus());
