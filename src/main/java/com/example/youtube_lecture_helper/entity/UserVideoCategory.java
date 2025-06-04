@@ -22,6 +22,7 @@ public class UserVideoCategory {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id", nullable = false)
     private Category category;
+    private boolean visible;
 
     @Column(name = "user_video_name")
     private String userVideoName;  // 유저가 지정한 비디오 이름

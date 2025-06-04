@@ -20,7 +20,9 @@ public class CategoryService {
     private final UserVideoCategoryRepository userVideoCategoryRepository;
     private final VideoRepository videoRepository;
     private final UserRepository userRepository;
+    private final QuizRepository quizRepository;
     private final QuizSetRepository quizSetRepository;
+    private final QuizSetMultiRepository quizSetMultiRepository;
     private final QuizAttemptRepository quizAttemptRepository;
     public static final Long DEFAULT_CATEGORY_ID = 1L;
 
@@ -193,6 +195,7 @@ public class CategoryService {
             Category category = new Category();
             category.setId(categoryId);
             uvc.setCategory(category);
+            uvc.setVisible(true);
 
             // 이름 업데이트 (이름이 제공된 경우에만)
             if (userVideoName != null && !userVideoName.isEmpty()) {
@@ -216,7 +219,7 @@ public class CategoryService {
     }
 
     /**
-     * 카테고리에서 비디오 제거
+     * 카테고리에서 비디오 제거 : soft-delete (visible=False로 변경)
      */
     public void removeVideoFromCategory(Long userId, String youtubeId, Long categoryId) {
         Video video = videoRepository.findByYoutubeId(youtubeId)
@@ -229,40 +232,29 @@ public class CategoryService {
         if (entryToRemove.isEmpty()) {
             throw new EntityNotFoundException("해당 카테고리에 비디오가 존재하지 않습니다.");
         }
-
-        List<QuizSet> deleteQuizSet = quizSetRepository.findAllByVideoAndUser(youtubeId,entryToRemove.get().getUser());
-        for(QuizSet quizSet : deleteQuizSet){
-            if(!quizSet.isMultiVideo()){
-                quizAttemptRepository.deleteByQuizSet(quizSet);
-                quizSetRepository.delete(quizSet);
-            }
-        }
-        userVideoCategoryRepository.delete(entryToRemove.get());
+        UserVideoCategory userVideoCategory = entryToRemove.get();
+        userVideoCategory.setVisible(false);
+        userVideoCategoryRepository.save(userVideoCategory);
     }
 
+    //카테고리 삭제 : 밑에 비디오 없으면 삭제 불가능하게 바꿈
     @Transactional
-    public void removeCategory(Long userId, Long categoryId){
+    public void removeCategory(Long userId, Long categoryId) {
         Optional<Category> removeCategory = categoryRepository.findById(categoryId);
-        if(removeCategory.isEmpty()){
+        if (removeCategory.isEmpty()) {
             throw new EntityNotFoundException("해당하는 카테고리가 존재하지 않음");
         }
-        if(!Objects.equals(removeCategory.get().getUser().getId(), userId)){
+        if (!Objects.equals(removeCategory.get().getUser().getId(), userId)) {
             throw new AccessDeniedException("해당 동작을 실행할 권한이 없음");
         }
-        List<QuizSet> deleteQuizSet = quizSetRepository.findValidQuizSetsByCategoryId(categoryId);
-        //CategoryId에 해당하는 영상Id의 사용자 퀴즈셋을 전부 찾아 다중 영상 퀴즈가 아닌 경우 전부 제거
-        for(QuizSet quizSet : deleteQuizSet){
-            if(!quizSet.isMultiVideo()){
-                quizAttemptRepository.deleteByQuizSet(quizSet);
-                quizSetRepository.delete(quizSet);
-            }
-        }
-        //유저가 저장한 비디오 정보 삭제.
-        List<UserVideoCategory> entry = userVideoCategoryRepository.findByCategoryId(categoryId);
 
-        for(UserVideoCategory video : entry){
-            userVideoCategoryRepository.delete(video);
+        // UserVideoCategory에 (category, video) 쌍이 하나라도 있으면 삭제 불가
+        List<UserVideoCategory> entry = userVideoCategoryRepository.findByCategoryId(categoryId);
+        if (!entry.isEmpty()) {
+            throw new IllegalStateException("해당 카테고리에 연결된 비디오가 있어 삭제할 수 없습니다.");
         }
+
+        // 카테고리 삭제
         categoryRepository.delete(removeCategory.get());
     }
 }
