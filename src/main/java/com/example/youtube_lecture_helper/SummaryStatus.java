@@ -5,5 +5,6 @@ public enum SummaryStatus {
     NO_SUBTITLE,
     NOT_LECTURE,
     PROCESSING,
-    FAILED
+    FAILED,
+    BANNED
 }
