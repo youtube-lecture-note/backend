@@ -29,7 +29,7 @@ public class QuizController {
             @RequestParam String videoId, @AuthenticationPrincipal UserDetails userDetails){
         return ResponseEntity.ok(quizService.getQuizCountByYoutubeId(videoId));
     }
-
+    //퀴즈 생성 (단일 난이도)
     @GetMapping("/api/quizzes")
     public ResponseEntity<ApiResponse<QuizService.CreatedQuizSetDTO>> getQuizzesWithDifficultyAndCount(
             @RequestParam String videoId,
@@ -42,6 +42,22 @@ public class QuizController {
                 userId,difficulty,videoId,count,false
         );
         return ApiResponse.buildResponse(HttpStatus.OK,"success",quizzes);
+    }
+
+    //퀴즈 생성(여러 난이도, 여러 유저용)
+    @GetMapping("/api/quizzes/multi-create")
+    public ResponseEntity<ApiResponse<QuizService.CreatedQuizSetDTO>> createQuizSetByCounts(
+            @RequestParam String videoId,
+            @RequestParam int level1Count,
+            @RequestParam int level2Count,
+            @RequestParam int level3Count,
+            @AuthenticationPrincipal UserDetails userDetails
+    ) {
+        Long userId = ((CustomUserDetails) userDetails).getId();
+        QuizService.CreatedQuizSetDTO quizzes = quizService.createQuizSetForUserByCounts(
+                userId, videoId, level1Count, level2Count, level3Count, true
+        );
+        return ApiResponse.buildResponse(HttpStatus.OK, "success", quizzes);
     }
 
     @PostMapping("/api/quizzes/submit")

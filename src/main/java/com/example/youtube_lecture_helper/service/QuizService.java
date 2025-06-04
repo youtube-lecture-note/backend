@@ -3,10 +3,7 @@ package com.example.youtube_lecture_helper.service;
 import com.example.youtube_lecture_helper.dto.QuizCountByDifficultyDto;
 import com.example.youtube_lecture_helper.dto.QuizCountDto;
 import com.example.youtube_lecture_helper.entity.*;
-import com.example.youtube_lecture_helper.exception.KeyNotFoundException;
-import com.example.youtube_lecture_helper.exception.QuizNotFoundException;
-import com.example.youtube_lecture_helper.exception.QuizSetNotFoundException;
-import com.example.youtube_lecture_helper.exception.UserNotFoundException;
+import com.example.youtube_lecture_helper.exception.*;
 import com.example.youtube_lecture_helper.repository.*;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -16,16 +13,20 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
+import java.util.ArrayList;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class QuizService {
     private final QuizRepository quizRepository;
+    private final VideoRepository videoRepository;
     private final QuizAttemptRepository quizAttemptRepository;
     private final QuizSetRepository quizSetRepository;
     private final QuizSetMultiRepository quizSetMultiRepository;
     private final UserRepository userRepository;
+    private final UserVideoCategoryRepository userVideoCategoryRepository;
 
     private final RedisService redisService;
 
@@ -99,6 +100,7 @@ public class QuizService {
                 QuizAttempt attempt = new QuizAttempt();
                 attempt.setQuizSet(savedQuizSet);
                 attempt.setQuiz(quiz);
+                attempt.setUser(user);
                 // userAnswer and isCorrect are initially null/false by default
                 return attempt;
             }).collect(Collectors.toList());
@@ -115,12 +117,94 @@ public class QuizService {
             return new CreatedQuizSetDTO(savedQuizSet.getId(), questionDTOs);
         }
     }
+    //난이도별 개수 다르게 생성
+    @Transactional
+    public CreatedQuizSetDTO createQuizSetForUserByCounts(
+            Long userId,
+            String youtubeId,
+            int level1Count,
+            int level2Count,
+            int level3Count,
+            boolean isForMultiUsers
+    ) {
+        // 1. Fetch the User
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException("User not found with id: " + userId));
+
+        // 2. Fetch quizzes by difficulty
+        List<Quiz> level1Quizzes = quizRepository.findByDifficultyAndYoutubeId(1, youtubeId);
+        List<Quiz> level2Quizzes = quizRepository.findByDifficultyAndYoutubeId(2, youtubeId);
+        List<Quiz> level3Quizzes = quizRepository.findByDifficultyAndYoutubeId(3, youtubeId);
+
+        // 3. Check if enough quizzes are available for each level
+        if (level1Quizzes.size() < level1Count) {
+            throw new InsufficientQuizzesException("쉬움 난이도 문제 부족: " + level1Quizzes.size() + "개 있음, " + level1Count + "개 필요");
+        }
+        if (level2Quizzes.size() < level2Count) {
+            throw new InsufficientQuizzesException("보통 난이도 문제 부족: " + level2Quizzes.size() + "개 있음, " + level2Count + "개 필요");
+        }
+        if (level3Quizzes.size() < level3Count) {
+            throw new InsufficientQuizzesException("어려움 난이도 문제 부족: " + level3Quizzes.size() + "개 있음, " + level3Count + "개 필요");
+        }
+
+        // 4. Select randomly for each level
+        Collections.shuffle(level1Quizzes);
+        Collections.shuffle(level2Quizzes);
+        Collections.shuffle(level3Quizzes);
+
+        List<Quiz> selectedQuizzes = new ArrayList<>();
+        selectedQuizzes.addAll(level1Quizzes.subList(0, level1Count));
+        selectedQuizzes.addAll(level2Quizzes.subList(0, level2Count));
+        selectedQuizzes.addAll(level3Quizzes.subList(0, level3Count));
+
+        // 5. Shuffle the combined list for randomness
+        Collections.shuffle(selectedQuizzes);
+
+        // 6. Create Quiz Set
+        QuizSet quizSet = new QuizSet();
+        quizSet.setUser(user);
+        quizSet.setMultiVideo(false);
+        quizSet.setAttemptTime(LocalDateTime.now());
+        QuizSet savedQuizSet = quizSetRepository.save(quizSet);
+
+        if(isForMultiUsers){
+            String quizSetkey = redisService.generateQuizKey(savedQuizSet.getId()); //redis로 key 만들어서 저장
+            List<QuizSetMulti> quizSetMultiList = selectedQuizzes.stream()  //selected quiz로 quizSetMulti에 저장
+                    .map(quiz -> {
+                        QuizSetMulti quizSetMulti = new QuizSetMulti();
+                        quizSetMulti.setQuizSet(savedQuizSet);
+                        quizSetMulti.setQuiz(quiz);
+                        return quizSetMulti;
+                    })
+                    .toList();
+            quizSetMultiRepository.saveAll(quizSetMultiList);
+            return new CreatedQuizSetDTO(savedQuizSet.getId(), null, quizSetkey);
+        }
+
+        // 7. Create Quiz Attempts
+        List<QuizAttempt> quizAttempts = selectedQuizzes.stream().map(quiz -> {
+            QuizAttempt attempt = new QuizAttempt();
+            attempt.setQuizSet(savedQuizSet);
+            attempt.setQuiz(quiz);
+            return attempt;
+        }).toList();
+
+        quizAttemptRepository.saveAll(quizAttempts);
+
+        // 8. Prepare and Return Response DTO
+        List<QuizQuestionDTO> questionDTOs = selectedQuizzes.stream()
+                .map(this::mapToQuizQuestionDTO)
+                .toList();
+
+        return new CreatedQuizSetDTO(savedQuizSet.getId(), questionDTOs);
+    }
 
     //뿌린 quizSetKey로 퀴즈셋 접근해서 quizAttempt에 만들기
     //캐시 적용 비교해보기
     @Transactional
     public CreatedQuizSetDTO getQuizSetQuizzesByRedisQuizSetKey(Long userId, String redisKey){
         Long quizSetId = redisService.resolveQuizSetId(redisKey).orElseThrow(()-> new KeyNotFoundException("Wrong Redis Key"));
+        //N+1
         List<QuizSetMulti> quizSetMultiList = quizSetMultiRepository.findByQuizSetId(quizSetId);
         QuizSet quizSet = quizSetRepository.findById(quizSetId)
                 .orElseThrow(() -> new QuizSetNotFoundException("QuizSet not found"));
@@ -147,6 +231,18 @@ public class QuizService {
         List<QuizQuestionDTO> questionDTOs = selectedQuizzes.stream()
                 .map(this::mapToQuizQuestionDTO)
                 .toList();
+        
+        Video video = videoRepository.findByYoutubeId(selectedQuizzes.get(0).getYoutubeId())
+            .orElseThrow(() -> new RuntimeException("Video not found"));
+
+        Optional<UserVideoCategory> uvcOpt = userVideoCategoryRepository.findByUserIdAndVideoId(userId, video.getId());
+        if (uvcOpt.isEmpty()) {
+            Category category = new Category();
+            category.setId(1L);  //default category로 저장
+            String userVideoName = video.getYoutubeId(); // 또는 원하는 이름
+            UserVideoCategory uvc = new UserVideoCategory(user, video, category, userVideoName);
+            userVideoCategoryRepository.save(uvc);
+        }
 
         return new CreatedQuizSetDTO(quizSetId, questionDTOs);
     }
