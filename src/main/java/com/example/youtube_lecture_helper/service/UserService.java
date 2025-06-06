@@ -15,9 +15,10 @@ public class UserService {
                 .orElse(null); // null 허용, 구글 로그인 시 신규 생성 위해
     }
     //email만 참고
-    public User createUser(String email, String role) {
+    public User createUser(String email, String name, String role) {
         User user = new User();
         user.setEmail(email);
+        user.setName(name);
         user.setRole(role);
         return userRepository.save(user);
     }

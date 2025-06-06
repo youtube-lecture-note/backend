@@ -64,7 +64,7 @@ public class AuthController {
             if (userDetails == null) {  //기존에 없던 사용자
                 // 신규 사용자 생성 로직 (이름, 권한 등 설정)
                 // 2. DB에 저장 (자동으로 ID가 생성됨)
-                User savedUser = userService.createUser(email,"USER");
+                User savedUser = userService.createUser(email,name,"USER");
                 List<GrantedAuthority> authorities = Collections.singletonList(new SimpleGrantedAuthority(savedUser.getRole()));
                 userDetails = new CustomUserDetails(savedUser.getId(), savedUser.getEmail(), "", authorities);
             }

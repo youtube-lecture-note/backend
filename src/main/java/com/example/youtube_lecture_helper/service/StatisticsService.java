@@ -13,6 +13,9 @@ import java.util.List;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.jdbc.core.BeanPropertyRowMapper;
 
 @Slf4j
 @Service
@@ -20,6 +23,12 @@ public class StatisticsService {
     //quiz_statistics 테이블은 quiz_id cascade on delete
     //user_statistics 테이블은 user_id cascade on delete
     
+    @EventListener(ApplicationReadyEvent.class)
+    public void initializeStatistics() {
+        log.info("Initializing statistics on server startup");
+        updateAllStatistics();
+    }
+
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
@@ -90,24 +99,28 @@ public class StatisticsService {
             WHERE q.id = ?
             """;
         
-        return jdbcTemplate.queryForObject(sql, QuizStatisticsDto.class, quizId);
+        List<QuizStatisticsDto> results = jdbcTemplate.query(sql, 
+            BeanPropertyRowMapper.newInstance(QuizStatisticsDto.class), quizId);
+        return results.isEmpty() ? null : results.get(0);
     }
+
     
     // 유저 정답률 조회
     public UserStatisticsDto getUserStatistics(Long userId) {
         String sql = """
             SELECT 
-                u.id,
-                u.username,
+                u.name,
                 COALESCE(us.total_attempts, 0) as total_attempts,
                 COALESCE(us.correct_attempts, 0) as correct_attempts,
                 COALESCE(us.accuracy_rate, 0) as accuracy_rate
-            FROM user u
-            LEFT JOIN user_statistics us ON u.id = us.user_id
+            FROM `user` u
+            LEFT JOIN `user_statistics` us ON u.id = us.user_id
             WHERE u.id = ?
             """;
         
-        return jdbcTemplate.queryForObject(sql, UserStatisticsDto.class, userId);
+        List<UserStatisticsDto> results = jdbcTemplate.query(sql, 
+        BeanPropertyRowMapper.newInstance(UserStatisticsDto.class), userId);
+        return results.isEmpty() ? null : results.get(0);
     }
 
     //정답률 상위 유저 랭킹 조회
