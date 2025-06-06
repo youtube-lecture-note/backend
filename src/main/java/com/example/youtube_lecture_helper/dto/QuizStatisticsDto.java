@@ -1,9 +1,9 @@
 package com.example.youtube_lecture_helper.dto;
-import lombok.Getter;
-import lombok.Setter;
+
 import java.math.BigDecimal;
-import lombok.AllArgsConstructor;
-import lombok.NoArgsConstructor;
+import java.math.RoundingMode;
+import lombok.*;
+import java.util.List;
 
 @Getter
 @Setter
@@ -13,7 +13,16 @@ public class QuizStatisticsDto {
     private Long id;
     private String question;
     private Integer difficulty;
-    private Integer totalAttempts;
-    private Integer correctAttempts;
+    private Long totalAttempts;
+    private Long correctAttempts;
     private BigDecimal accuracyRate;
+
+    public QuizStatisticsDto(Long id, Long totalAttempts, Long correctAttempts, Double accuracyRate) {
+        this.id = id;
+        this.totalAttempts = totalAttempts;
+        this.correctAttempts = correctAttempts;
+        this.accuracyRate = accuracyRate != null ? 
+            BigDecimal.valueOf(accuracyRate).setScale(2, RoundingMode.HALF_UP) : 
+            BigDecimal.ZERO;
+    }
 }

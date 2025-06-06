@@ -139,4 +139,21 @@ public class CategoryController {
         categoryService.addVideoToCategory(userId, videoId, toCategoryId, userVideoName);
         return ResponseEntity.noContent().build();
     }
+
+    //userId, youtubeId로 카테고리 id 조회
+    @GetMapping("/{youtubeId}")
+    public ResponseEntity<Long> getCategoryIdByYoutubeId(
+            @PathVariable String youtubeId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        Long userId = ((CustomUserDetails) userDetails).getId();
+        Long categoryId = categoryService.getCategoryIdByVideoIdAndUserId(userId, youtubeId);
+        return ResponseEntity.ok(categoryId);
+    }
+    @GetMapping("/{youtubeId}/test")    //ansd5B27uJM
+    public ResponseEntity<Long> getCategoryIdByVideoIdAndUserIdTest(
+            @PathVariable String youtubeId) {
+        Long userId = 9L;
+        Long categoryId = categoryService.getCategoryIdByVideoIdAndUserId(userId, youtubeId);
+        return ResponseEntity.ok(categoryId);
+    }
 }

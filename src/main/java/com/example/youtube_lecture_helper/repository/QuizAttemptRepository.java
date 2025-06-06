@@ -3,6 +3,8 @@ package com.example.youtube_lecture_helper.repository;
 import com.example.youtube_lecture_helper.dto.QuizAttemptDto;
 import com.example.youtube_lecture_helper.dto.QuizHistorySummaryDto;
 import com.example.youtube_lecture_helper.dto.QuizAttemptWithAnswerDto;
+import com.example.youtube_lecture_helper.dto.ParticipantResultDto;
+import com.example.youtube_lecture_helper.dto.QuizStatisticsDto;
 import com.example.youtube_lecture_helper.entity.QuizAttempt;
 import com.example.youtube_lecture_helper.entity.QuizSet;
 import org.springframework.data.jpa.repository.Modifying;
@@ -14,21 +16,21 @@ import java.util.List;
 
 public interface QuizAttemptRepository  extends JpaRepository<QuizAttempt,Long> {
     @Query("SELECT " +
-            "  v.youtubeId AS youtubeId, " +
-            "  COALESCE(uvc.userVideoName, v.youtubeId) AS userVideoName, " +
-            "  v.id AS videoId, " +
-            "  qs.attemptTime AS date, " +
-            "  qs.id AS quizSetId, " +
-            "  COUNT(qa.id) AS totalQuizzes, " +
-            "  SUM(CASE WHEN qa.isCorrect = false THEN 1 ELSE 0 END) AS wrongCount " +
-            "FROM QuizAttempt qa " +
-            "JOIN qa.quizSet qs " +
-            "JOIN qa.quiz q " +
-            "JOIN Video v ON q.youtubeId = v.youtubeId " +
-            "LEFT JOIN UserVideoCategory uvc ON uvc.video.id = v.id AND uvc.user.id = qs.user.id " +
-            "WHERE (qs.user.id = :userId OR qa.user.id = :userId) " +
-            "GROUP BY v.youtubeId, uvc.userVideoName, v.id, qs.attemptTime, qs.id " +
-            "ORDER BY qs.attemptTime DESC")
+        "  q.youtubeId AS youtubeId, " +
+        "  COALESCE(uvc.userVideoName, q.youtubeId) AS userVideoName, " +
+        "  v.id AS videoId, " +
+        "  qs.attemptTime AS date, " +
+        "  qs.id AS quizSetId, " +
+        "  COUNT(qa.id) AS totalQuizzes, " +
+        "  SUM(CASE WHEN qa.isCorrect = false THEN 1 ELSE 0 END) AS wrongCount " +
+        "FROM QuizAttempt qa " +
+        "JOIN qa.quizSet qs " +
+        "JOIN qa.quiz q " +
+        "JOIN Video v ON q.youtubeId = v.youtubeId " +
+        "LEFT JOIN UserVideoCategory uvc ON uvc.video.id = v.id AND uvc.user.id = :userId " +
+        "WHERE qa.user.id = :userId " +
+        "GROUP BY q.youtubeId, uvc.userVideoName, v.id, qs.attemptTime, qs.id " +
+        "ORDER BY qs.attemptTime DESC")
     List<QuizHistorySummaryDto> findQuizSetSummariesByUserId(@Param("userId") Long userId);
 
 
@@ -121,4 +123,35 @@ public interface QuizAttemptRepository  extends JpaRepository<QuizAttempt,Long> 
     @Modifying
     @Query("DELETE FROM QuizAttempt qa WHERE qa.quiz.id = :quizId")
     void deleteByQuizId(@Param("quizId") Long quizId);
+
+
+    @Query("""
+        select case when count(qa) > 0 then true else false end
+        from QuizAttempt qa
+        where qa.user.id = :userId
+        and qa.quizSet.id = :quizSetId
+        """)
+    boolean existsByUserIdAndQuizSetId(@Param("userId") Long userId, @Param("quizSetId") Long quizSetId);
+
+    @Query("SELECT new com.example.youtube_lecture_helper.dto.ParticipantResultDto(" +
+       "u.name, u.email, " +
+       "SUM(CASE WHEN qa.isCorrect = true THEN 1L ELSE 0L END)) " +
+       "FROM QuizAttempt qa " +
+       "JOIN qa.user u " +
+       "WHERE qa.quizSet.id = :quizSetId " +
+       "GROUP BY u.id, u.name, u.email " +
+       "ORDER BY u.name ASC")
+    List<ParticipantResultDto> findParticipantResultsByQuizSetId(@Param("quizSetId") Long quizSetId);
+
+
+    @Query("SELECT new com.example.youtube_lecture_helper.dto.QuizStatisticsDto(" +
+       "qa.quiz.id, " +
+       "COUNT(qa), " +
+       "SUM(CASE WHEN qa.isCorrect = true THEN 1L ELSE 0L END), " +
+       "ROUND((SUM(CASE WHEN qa.isCorrect = true THEN 1.0 ELSE 0.0 END) * 100.0 / COUNT(qa)), 2)) " +
+       "FROM QuizAttempt qa " +
+       "WHERE qa.quizSet.id = :quizSetId " +
+       "GROUP BY qa.quiz.id " +
+       "ORDER BY qa.quiz.id")
+    List<QuizStatisticsDto> findQuizStatisticsByQuizSetId(@Param("quizSetId") Long quizSetId);
 }

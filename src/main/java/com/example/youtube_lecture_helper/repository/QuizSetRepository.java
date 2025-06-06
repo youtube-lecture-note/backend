@@ -48,5 +48,12 @@ public interface QuizSetRepository extends JpaRepository<QuizSet,Long> {
         where qsm.quiz.id = :quizId
     """)
     List<QuizSet> findAllByQuizId(@Param("quizId") Long quizId);
+    
+    boolean existsByIdAndUserId(Long id, Long userId);
 
+    // 특정 유저가 제작한 멀티 퀴즈 세트 가져오기
+    @Query("SELECT DISTINCT qs FROM QuizSet qs " +
+       "JOIN QuizSetMulti qsm ON qsm.quizSet.id = qs.id " +
+       "WHERE qs.user.id = :userId")
+    List<QuizSet> findMultiQuizSetsByUserId(@Param("userId") Long userId);
 }

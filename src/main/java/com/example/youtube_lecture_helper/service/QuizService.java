@@ -1,7 +1,6 @@
 package com.example.youtube_lecture_helper.service;
 
-import com.example.youtube_lecture_helper.dto.QuizCountByDifficultyDto;
-import com.example.youtube_lecture_helper.dto.QuizCountDto;
+import com.example.youtube_lecture_helper.dto.*;
 import com.example.youtube_lecture_helper.entity.*;
 import com.example.youtube_lecture_helper.exception.*;
 import com.example.youtube_lecture_helper.repository.*;
@@ -17,6 +16,7 @@ import java.util.Optional;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
 
+
 @Service
 @RequiredArgsConstructor
 public class QuizService {
@@ -30,11 +30,6 @@ public class QuizService {
 
     private final RedisService redisService;
 
-//    public QuizService(OpenAIGptClient gptClient, QuizRepository quizRepository, QuizLogService quizLogService){
-//        this.gptClient = gptClient;
-//        this.quizRepository = quizRepository;
-//        this.quizLogService = quizLogService;
-//    }
     public QuizCountDto getQuizCountByYoutubeId(String youtubeId){
         List<QuizCountByDifficultyDto> quizCountByDifficultyDtos = quizRepository.countQuizzesByDifficultyAndYoutubeId(youtubeId);
         long level1 = 0L, level2 = 0L, level3 = 0L;
@@ -125,7 +120,8 @@ public class QuizService {
             int level1Count,
             int level2Count,
             int level3Count,
-            boolean isForMultiUsers
+            boolean isForMultiUsers,
+            String name
     ) {
         // 1. Fetch the User
         User user = userRepository.findById(userId)
@@ -164,6 +160,7 @@ public class QuizService {
         QuizSet quizSet = new QuizSet();
         quizSet.setUser(user);
         quizSet.setMultiVideo(false);
+        quizSet.setName(name);
         quizSet.setAttemptTime(LocalDateTime.now());
         QuizSet savedQuizSet = quizSetRepository.save(quizSet);
 
@@ -204,6 +201,12 @@ public class QuizService {
     @Transactional
     public CreatedQuizSetDTO getQuizSetQuizzesByRedisQuizSetKey(Long userId, String redisKey){
         Long quizSetId = redisService.resolveQuizSetId(redisKey).orElseThrow(()-> new KeyNotFoundException("Wrong Redis Key"));
+        
+        boolean alreadyAttempted = quizAttemptRepository.existsByUserIdAndQuizSetId(userId, quizSetId);
+        if (alreadyAttempted) {
+            throw new QuizAlreadyAttemptedException("이미 시도한 퀴즈셋입니다. 다시 풀 수 없습니다.");
+        }
+        
         //N+1
         List<QuizSetMulti> quizSetMultiList = quizSetMultiRepository.findByQuizSetId(quizSetId);
         QuizSet quizSet = quizSetRepository.findById(quizSetId)
@@ -245,6 +248,67 @@ public class QuizService {
         }
 
         return new CreatedQuizSetDTO(quizSetId, questionDTOs);
+    }
+
+    public boolean isQuizSetCreator(Long quizSetId, Long userId) {
+        return quizSetRepository.existsByIdAndUserId(quizSetId, userId);
+    }
+    
+    public QuizSetResultsDto getQuizSetResultsMulti(Long quizSetId) {
+        // 1. 총 문제 수 조회
+        Long totalQuizCount = quizSetMultiRepository.countQuizzesByQuizSetId(quizSetId);
+        
+        // 2. 참여자별 결과 (중복 제거됨)
+        List<ParticipantResultDto> participantResults = quizAttemptRepository
+                .findParticipantResultsByQuizSetId(quizSetId);
+        
+        // 3. 문항별 정답률 통계
+        List<QuizStatisticsDto> quizStatistics = quizAttemptRepository
+                .findQuizStatisticsByQuizSetId(quizSetId);
+        
+        return QuizSetResultsDto.builder()
+                .quizSetId(quizSetId)
+                .totalQuizCount(totalQuizCount.intValue())
+                .participantCount(participantResults.size())
+                .participantResults(participantResults)
+                .quizStatistics(quizStatistics)
+                .build();
+    }
+
+
+    // 특정 유저가 제작한 멀티 퀴즈셋 가져오기
+    public List<QuizSetSummaryDto> getMultiQuizSetsByUser(Long userId) {
+    List<QuizSet> quizSets = quizSetRepository.findMultiQuizSetsByUserId(userId);
+    
+    return quizSets.stream()
+            .map(qs -> new QuizSetSummaryDto(qs.getId(), qs.getName(),qs.getAttemptTime()))
+            .toList();
+    }
+
+    // 특정 퀴즈셋의 퀴즈를 모두 가져오기
+    public List<QuizWithAnswerDto> getAllQuizzesInSet(Long quizSetId, Long userId) {
+        if (!isQuizSetCreator(quizSetId, userId)) {
+            throw new AccessDeniedException("해당 퀴즈셋의 퀴즈를 조회할 권한이 없습니다.");
+        }
+        List<Quiz> quizzes = quizSetMultiRepository.findQuizzesByQuizSetId(quizSetId);
+        return quizzes.stream()
+                .map(this::convertToQuizWithAnswerDto)
+                .toList();
+    }
+
+    //helper method to convert Quiz to QuizWithAnswerDto (답안 포함)
+    private QuizWithAnswerDto convertToQuizWithAnswerDto(Quiz quiz) {
+        QuizWithAnswerDto dto = new QuizWithAnswerDto();
+        dto.setId(quiz.getId());
+        dto.setQuestion(quiz.getQuestion());
+        dto.setSelective(quiz.isSelective());
+        dto.setCorrectAnswer(quiz.getCorrectAnswer());
+        dto.setComment(quiz.getComment());
+        
+        if (quiz.isSelective()) {
+            dto.setOptions(quiz.getOptions());
+        }
+        return dto;
     }
 
     private QuizQuestionDTO mapToQuizQuestionDTO(Quiz quiz) {

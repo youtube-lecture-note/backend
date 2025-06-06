@@ -15,6 +15,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
+import com.example.youtube_lecture_helper.service.CreateSummaryAndQuizService;
 import java.util.List;
 
 @RestController
@@ -23,6 +24,8 @@ public class QuizController {
 
     private final QuizService quizService;
     private final QuizAttemptService quizAttemptService;
+    private final CreateSummaryAndQuizService createSummaryAndQuizService;
+
     //난이도별 퀴즈 개수 반환
     @GetMapping("/api/quizzes/count")
     public ResponseEntity<QuizCountDto> getQuizCount(
@@ -38,6 +41,14 @@ public class QuizController {
             @AuthenticationPrincipal UserDetails userDetails
     ){
         Long userId = ((CustomUserDetails) userDetails).getId();
+        
+        if(createSummaryAndQuizService.isQuizProcessing(videoId)) {
+            return ApiResponse.buildResponse(
+                    HttpStatus.BAD_REQUEST,
+                    "퀴즈를 생성 중입니다.",
+                    null
+            );
+        }
         QuizService.CreatedQuizSetDTO quizzes = quizService.createQuizSetForUser(
                 userId,difficulty,videoId,count,false
         );
@@ -51,11 +62,19 @@ public class QuizController {
             @RequestParam int level1Count,
             @RequestParam int level2Count,
             @RequestParam int level3Count,
+            @RequestParam String quizSetName,
             @AuthenticationPrincipal UserDetails userDetails
     ) {
+        if(createSummaryAndQuizService.isQuizProcessing(videoId)) {
+            return ApiResponse.buildResponse(
+                    HttpStatus.BAD_REQUEST,
+                    "퀴즈를 생성 중입니다.",
+                    null
+            );
+        }
         Long userId = ((CustomUserDetails) userDetails).getId();
         QuizService.CreatedQuizSetDTO quizzes = quizService.createQuizSetForUserByCounts(
-                userId, videoId, level1Count, level2Count, level3Count, true
+                userId, videoId, level1Count, level2Count, level3Count, true, quizSetName
         );
         return ApiResponse.buildResponse(HttpStatus.OK, "success", quizzes);
     }
@@ -120,6 +139,13 @@ public class QuizController {
             @AuthenticationPrincipal UserDetails userDetails
     ){
         Long userId = ((CustomUserDetails)userDetails).getId();
+        if(createSummaryAndQuizService.isQuizProcessing(videoId)) {
+            return ApiResponse.buildResponse(
+                    HttpStatus.BAD_REQUEST,
+                    "퀴즈를 생성 중입니다.",
+                    null
+            );
+        }
         return ResponseEntity.ok(quizService.createQuizSetForUser(userId,difficulty,videoId,count,true));
     }
 
@@ -131,5 +157,19 @@ public class QuizController {
     ){
         Long userId = ((CustomUserDetails)userDetails).getId();
         return ResponseEntity.ok(quizService.getQuizSetQuizzesByRedisQuizSetKey(userId,redisKey));  //내부적으로는 quizAttempt에 시도 생성
+    }
+
+    //QuizSetMulti 생성자가 해당 Quiz를 푼 사람들과 각 정답 개수 조회
+    @GetMapping("/api/quizzes/multi/{quizSetId}/results")
+    public ResponseEntity<?> getQuizSetMultiResults(
+            @PathVariable Long quizSetId,
+            @AuthenticationPrincipal UserDetails userDetails
+    ){
+        Long userId = ((CustomUserDetails)userDetails).getId();
+        if (!quizService.isQuizSetCreator(quizSetId, userId)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body("해당 퀴즈셋의 결과를 조회할 권한이 없습니다.");
+        }   
+        return ResponseEntity.ok(quizService.getQuizSetResultsMulti(quizSetId));
     }
 }

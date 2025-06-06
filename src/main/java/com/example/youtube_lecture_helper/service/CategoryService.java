@@ -214,6 +214,7 @@ public class CategoryService {
             UserVideoCategory userVideoCategory = new UserVideoCategory(
                     user, video, category, userVideoName
             );
+            userVideoCategory.setVisible(true);   //visible = true로 설정
             userVideoCategoryRepository.save(userVideoCategory);
         }
     }
@@ -256,5 +257,18 @@ public class CategoryService {
 
         // 카테고리 삭제
         categoryRepository.delete(removeCategory.get());
+    }
+    /*
+    video id, user id로 카테고리 id 조회
+    */
+   public Long getCategoryIdByVideoIdAndUserId(Long userId, String youtubeId) {
+        Video video = videoRepository.findByYoutubeId(youtubeId)
+                .orElseThrow(() -> new EntityNotFoundException("해당 유튜브 ID의 비디오를 찾을 수 없습니다: " + youtubeId));
+
+        UserVideoCategory userVideoCategory = userVideoCategoryRepository
+                .findByUserIdAndVideoId(userId, video.getId())
+                .orElseThrow(() -> new EntityNotFoundException("해당 유저의 비디오 카테고리를 찾을 수 없습니다."));
+
+        return userVideoCategory.getCategory().getId();
     }
 }
