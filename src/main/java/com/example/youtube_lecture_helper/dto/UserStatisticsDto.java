@@ -10,8 +10,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class UserStatisticsDto {
-    private Long userId;
-    private String username;
+    private String name;
     private Integer totalAttempts;
     private Integer correctAttempts;
     private BigDecimal accuracyRate;

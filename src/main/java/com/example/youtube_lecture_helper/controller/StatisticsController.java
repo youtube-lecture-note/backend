@@ -13,7 +13,7 @@ import com.example.youtube_lecture_helper.dto.UserRankingDto;
 import com.example.youtube_lecture_helper.dto.UserStatisticsDto;
 import com.example.youtube_lecture_helper.service.StatisticsService;
 import java.util.List;
-
+import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
@@ -23,11 +23,18 @@ public class StatisticsController{
     private final StatisticsService statisticsService;
 
     @GetMapping("/quiz")
-    public ResponseEntity<QuizStatisticsDto> getQuizStatistics(
+    public ResponseEntity<?> getQuizStatistics(
         @AuthenticationPrincipal UserDetails userDetails,
         @RequestParam(required = true) Long quizId
     ) {
         QuizStatisticsDto statistics = statisticsService.getQuizStatistics(quizId);
+        if (statistics == null) {
+            Map<String, String> error = Map.of(
+                "error", "INSUFFICIENT_DATA",
+                "message", "통계 데이터가 부족합니다. 최소 10회 시도가 필요합니다."
+            );
+            return ResponseEntity.badRequest().body(error); // 400 상태 코드
+        }
         return ResponseEntity.ok(statistics);
     }
 
