@@ -38,6 +38,7 @@ public class CreateSummaryAndQuizService {
     private final ApplicationEventPublisher eventPublisher;
 
     private final ConcurrentHashMap<String, Mono<SummaryResult>> processingCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Mono<Void>> quizProcessingCache = new ConcurrentHashMap<>();
     
     //video 밴 리스트에 없음 + videoRepo에 이미 존재하는지 검색 후 호출
     public Mono<SummaryResult> initiateVideoProcessing(Long userId, String videoId, String language) {
@@ -92,163 +93,132 @@ public class CreateSummaryAndQuizService {
 
 
     /**
-     * Generates the summary and, upon success, triggers the quiz generation
-     * and saving process in the background without waiting for it.
-     *
-     * @param videoId  YouTube Video ID
-     * @param language Language code
-     * @return Mono emitting the SummaryResult once generated.
+     * Generates the summary, saves it to DB, returns the result,
+     * and then triggers quiz generation in the background.
      */
     private Mono<SummaryResult> generateSummaryAndTriggerQuizProcessing(Long userId, String videoId, String language) {
         log.debug("Executing summary generation pipeline for videoId: {}", videoId);
         return reactiveGptClient.getVideoSummaryReactive(videoId, language)
                 .flatMap(summaryResult -> {
                     if (summaryResult.isSuccess()) {
-                        log.info("Summary successful for videoId: {}. Triggering background quiz generation and saving.", videoId);
-                        // *** Trigger background processing ***
-                        // We don't wait for this Mono to complete.
-                        // subscribe() kicks off the execution on a background thread.
-                        generateAndSaveQuizzesInBackground(userId, videoId, language, summaryResult)
-                                .subscribeOn(Schedulers.boundedElastic()) // Run background task on appropriate scheduler
+                        log.info("Summary successful for videoId: {}. Saving to DB first.", videoId);
+                        // *** 먼저 summary를 DB에 저장 ***
+                        return saveSummaryToDatabase(videoId, summaryResult)
+                            .then(Mono.fromCallable(() -> {
+                                // 퀴즈 생성 캐시 확인
+                                quizProcessingCache.computeIfAbsent(videoId, key -> {
+                                    log.info("Starting quiz generation for videoId: {}", key);
+                                    return generateQuizzesInBackground(userId, key, language, summaryResult)
+                                            .doFinally(signal -> {
+                                                log.info("Quiz processing completed for videoId: {}. Removing from cache.", key);
+                                                quizProcessingCache.remove(key);
+                                            });
+                                }).subscribeOn(Schedulers.boundedElastic())
                                 .subscribe(
-                                        vd -> log.info("Background quiz/save task completed successfully for videoId: {}", videoId),
-                                        err -> log.error("Background quiz/save task failed for videoId: {}", videoId, err)
+                                        vd -> log.info("Background quiz generation completed for videoId: {}", videoId),
+                                        err -> log.error("Background quiz generation failed for videoId: {}", videoId, err)
                                 );
-                        // Return the successful summary result immediately
-                        return Mono.just(summaryResult);
+                                return summaryResult;
+                            }));
                     } else {
-                        // Summary failed, return the failure result
-                        log.warn("Summary generation failed for videoId: {} with status: {}. No background task triggered.", videoId, summaryResult.getStatus());
+                        log.warn("Summary generation failed for videoId: {} with status: {}.", videoId, summaryResult.getStatus());
                         return Mono.just(summaryResult);
                     }
                 })
                 .onErrorResume(exception -> {
-                    log.error("Critical error during summary phase for videoId: {}. Cannot proceed.", videoId, exception);
+                    log.error("Critical error during summary phase for videoId: {}.", videoId, exception);
                     SummaryResult errorSummary = new SummaryResult(SummaryStatus.FAILED, "Error during summary: " + exception.getMessage());
                     return Mono.just(errorSummary);
                 })
-                .timeout(Duration.ofMinutes(5), Mono.defer(() -> { // Timeout specifically for summary generation
+                .timeout(Duration.ofMinutes(5), Mono.defer(() -> {
                     log.error("Summary generation timed out for videoId: {}", videoId);
                     SummaryResult timeoutSummary = new SummaryResult(SummaryStatus.FAILED, "Summary generation timed out after 5 minutes");
                     return Mono.just(timeoutSummary);
-                }))
-                .log("SummaryGeneration." + videoId, Level.FINE, SignalType.ON_NEXT, SignalType.ON_ERROR);
+                }));
     }
 
+    /*
+    * Summary만 DB에 저장하는 메서드 (동기적 처리)
+     */
+    private Mono<Void> saveSummaryToDatabase(String videoId, SummaryResult summaryResult) {
+        if (summaryResult.getStatus() != SummaryStatus.SUCCESS) {
+            log.warn("Attempted to save summary for videoId {} but status was {}. Skipping save.", videoId, summaryResult.getStatus());
+            return Mono.empty();
+        }
+
+        return Mono.fromRunnable(() -> {
+                    log.info("Saving summary to DB for videoId: {}", videoId);
+                    
+                    Video videoToSave = videoRepository.findByYoutubeId(videoId)
+                            .orElseGet(() -> {
+                                log.info("Video with id {} not found in DB. Creating new entry.", videoId);
+                                return new Video(videoId, summaryResult.getSummary());
+                            });
+
+                    // Summary 설정
+                    if (videoToSave.getSummary() == null || videoToSave.getSummary().isBlank()) {
+                        videoToSave.setSummary(summaryResult.getSummary());
+                    }
+
+                    // Video 저장
+                    videoRepository.save(videoToSave);
+                    log.info("Summary saved to DB for videoId: {}", videoId);
+                })
+                .subscribeOn(Schedulers.boundedElastic())
+                .then();
+    }
 
     /**
-     * Runs in the background. Generates quizzes based on the summary and saves
-     * both the summary (if video is new) and the quizzes to the database.
-     * This method handles its own errors internally by logging.
-     *
-     * @param videoId       YouTube Video ID
-     * @param language      Language code
-     * @param summaryResult The successful summary result.
-     * @return Mono<Void> indicating completion of the background task (or error).
+     * 퀴즈만 백그라운드에서 생성하고 저장하는 메서드
      */
-    private Mono<Void> generateAndSaveQuizzesInBackground(Long userId, String videoId, String language, SummaryResult summaryResult) {
-        log.info("Starting background task: Generate quizzes and save for videoId: {}", videoId);
+    private Mono<Void> generateQuizzesInBackground(Long userId, String videoId, String language, SummaryResult summaryResult) {
+        log.info("Starting background quiz generation for videoId: {}", videoId);
         String summaryContent = summaryResult.getSummary();
 
         if (summaryContent == null || summaryContent.isBlank()) {
-            log.warn("Background task: Summary content is blank for videoId: {}. Skipping quiz generation.", videoId);
-            // Still attempt to save the summary if video is new
-            return saveResultToDatabase(videoId, summaryResult, Collections.emptyList())
-                    .doOnError(e -> log.error("Background task: Failed to save empty summary for videoId: {}", videoId, e))
-                    .then();
+            log.warn("Summary content is blank for videoId: {}. Skipping quiz generation.", videoId);
+            return Mono.empty();
         }
 
-        // Generate quizzes concurrently
+        // 퀴즈 생성
         Mono<List<Quiz>> multiChoiceMono = reactiveGptClient.sendSummariesAndGetQuizzesReactive(videoId, summaryContent, QuizType.MULTIPLE_CHOICE)
-                .doOnSubscribe(s -> log.debug("Background task: Starting Multiple Choice quiz generation for {}", videoId))
-                .doOnError(e -> log.error("Background task: Error generating Multiple Choice quizzes for {}", videoId, e))
+                .doOnError(e -> log.error("Error generating Multiple Choice quizzes for {}", videoId, e))
                 .onErrorReturn(Collections.emptyList());
 
         Mono<List<Quiz>> shortAnswerMono = reactiveGptClient.sendSummariesAndGetQuizzesReactive(videoId, summaryContent, QuizType.SHORT_ANSWER)
-                .doOnSubscribe(s -> log.debug("Background task: Starting Short Answer quiz generation for {}", videoId))
-                .doOnError(e -> log.error("Background task: Error generating Short Answer quizzes for {}", videoId, e))
+                .doOnError(e -> log.error("Error generating Short Answer quizzes for {}", videoId, e))
                 .onErrorReturn(Collections.emptyList());
 
-        // Combine quiz results
         return Mono.zip(multiChoiceMono, shortAnswerMono)
                 .flatMap(tuple -> {
                     List<Quiz> allQuizzes = new ArrayList<>();
                     allQuizzes.addAll(tuple.getT1());
                     allQuizzes.addAll(tuple.getT2());
-                    log.info("Background task: Successfully generated {} total quizzes ({} MC, {} SA) for videoId: {}",
-                            allQuizzes.size(), tuple.getT1().size(), tuple.getT2().size(), videoId);
+                    log.info("Generated {} total quizzes for videoId: {}", allQuizzes.size(), videoId);
 
-                    // Save summary (if needed) and quizzes
-                    return saveResultToDatabase(videoId, summaryResult, allQuizzes)
-                            .then(Mono.fromRunnable(() -> { //db에 video 저장된 뒤 event 발행해서 기본 category에 저장하기
-                                String title = youtubeSubtitleExtractor.getYouTubeTitle(videoId);
-                                // 이벤트 발행
-                                eventPublisher.publishEvent(
-                                        new VideoProcessedEvent(videoId, userId, title)
-                                );
-                                log.info("Published video processed event for videoId: {}", videoId);
-                            }))
-                            .subscribeOn(Schedulers.boundedElastic());
+                    // 퀴즈만 저장
+                    return saveQuizzesToDatabase(videoId, allQuizzes);
                 })
-                .timeout(Duration.ofMinutes(10), Mono.defer(() -> { // Timeout for quiz generation + saving
-                    log.error("Background task: Quiz generation/saving timed out for videoId: {}", videoId);
-                    // Decide if you want to save just the summary on timeout
-                    // return saveResultToDatabase(videoId, summaryResult, Collections.emptyList());
-                    return Mono.error(new RuntimeException("Background quiz/save task timed out for videoId: " + videoId));
+                .timeout(Duration.ofMinutes(10), Mono.defer(() -> {
+                    log.error("Background quiz generation timed out for videoId: {}", videoId);
+                    return Mono.error(new RuntimeException("Quiz generation timed out for videoId: " + videoId));
                 }))
-                .then(); // Convert to Mono<Void>
+                .then();
     }
-
 
     /**
-     * Saves the Video summary (if new) and Quizzes to the database.
-     * Handles blocking JPA calls. Runs within the background task.
-     *
-     * @param videoId       YouTube Video ID
-     * @param summaryResult The summary result (containing status and content)
-     * @param quizzes       The list of quizzes to save (can be empty)
-     * @return Mono<Void> indicating completion or error.
+     * 퀴즈만 DB에 저장하는 메서드
      */
-    private Mono<Void> saveResultToDatabase(String videoId, SummaryResult summaryResult, List<Quiz> quizzes) {
-        // Check if the summary was actually successful before saving
-        if (summaryResult.getStatus() != SummaryStatus.SUCCESS) {
-            log.warn("Attempted to save result for videoId {} but summary status was {}. Skipping save.", videoId, summaryResult.getStatus());
-            return Mono.empty(); // Or Mono.error() if this is unexpected
-        }
-
+    private Mono<Void> saveQuizzesToDatabase(String videoId, List<Quiz> quizzes) {
         return Mono.fromRunnable(() -> {
-                    log.info("Background task: Attempting to save results to DB for videoId: {}", videoId);
-
-                    // Use findOrSave pattern for Video to avoid race conditions if possible,
-                    // or stick to the check-then-save approach.
-                    Video videoToSave = videoRepository.findByYoutubeId(videoId)
-                            .orElseGet(() -> {
-                                log.info("Background task: Video with id {} not found in DB. Creating new entry.", videoId);
-                                // Only create if it doesn't exist
-                                return new Video(videoId, summaryResult.getSummary());
-                            });
-
-                    // Ensure summary is set if the video was pre-existing but lacked one
-                    if (videoToSave.getSummary() == null || videoToSave.getSummary().isBlank()) {
-                        log.info("Background task: Existing video {} lacked summary. Setting summary.", videoId);
-                        videoToSave.setSummary(summaryResult.getSummary()); // Assume setter exists
-                    }
-
-                    // Save video (either new or updated summary)
-                    videoRepository.save(videoToSave);
-                    log.info("Background task: Video entity saved/updated for videoId: {}", videoId);
-
-
-                    // Save Quizzes
+                    log.info("Saving {} quizzes to DB for videoId: {}", quizzes.size(), videoId);
                     saveQuizzes(videoId, quizzes);
-
-                    log.info("Background task: Finished DB save process for videoId: {}", videoId);
+                    log.info("Quizzes saved to DB for videoId: {}", videoId);
                 })
-                .subscribeOn(Schedulers.boundedElastic()) // Run blocking DB operations on appropriate scheduler
-                .then(); // Convert Mono<Runnable> completion signal to Mono<Void>
+                .subscribeOn(Schedulers.boundedElastic())
+                .then();
     }
-
-    // saveQuizzes remains largely the same, just ensure logging indicates it's part of the background task
+     // saveQuizzes remains largely the same, just ensure logging indicates it's part of the background task
     private void saveQuizzes(String videoId, List<Quiz> quizzesToSave) {
         if (quizzesToSave != null && !quizzesToSave.isEmpty()) {
             // Optional: Delete existing quizzes first if you always want a fresh set.
@@ -264,6 +234,7 @@ public class CreateSummaryAndQuizService {
             log.info("Background task: No quizzes generated or found to save for videoId: {}", videoId);
         }
     }
+
     //요약 요청하기 전 밴 된 영상인지 먼저 확인하기
     private Mono<Optional<Ban>> checkIfBanned(String videoId) {
         return Mono.fromCallable(() -> {
@@ -278,5 +249,11 @@ public class CreateSummaryAndQuizService {
         eventPublisher.publishEvent(new VideoProcessedEvent(youtubeId, userId, title));
         log.info("Published video processed event for youtubeId: {}", youtubeId);
     }
-
+    
+    //퀴즈 생성 중인지 캐시로 확인하고 boolean 반환
+    public boolean isQuizProcessing(String videoId) {
+        synchronized (this) {
+            return quizProcessingCache.containsKey(videoId) || processingCache.containsKey(videoId);
+        }
+    }
 }
