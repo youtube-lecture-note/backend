@@ -47,7 +47,14 @@ public class SummaryController {
             @RequestParam String videoId,
             @AuthenticationPrincipal UserDetails userDetails) {
         log.info("Received async request to process video: {}", videoId);
-        Long userId = ((CustomUserDetails) userDetails).getId();
+        Long userId = null;
+        try{
+            userId = ((CustomUserDetails) userDetails).getId();
+        }catch(NullPointerException e){
+            log.error("UserDetails is null or does not contain user ID", e);
+            return Mono.just(ApiResponse.<String>buildResponse(
+                    HttpStatus.UNAUTHORIZED, "사용자 인증 정보가 없습니다.", "로그인이 필요합니다"));
+        }
 
         // 서비스 호출하여 요약 결과 Mono 받기
         return createSummaryAndQuizService.initiateVideoProcessing(userId, videoId, "ko")

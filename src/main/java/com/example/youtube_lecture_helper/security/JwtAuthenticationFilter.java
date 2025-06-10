@@ -37,4 +37,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         filterChain.doFilter(request, response);
     }
+    @Override
+    protected boolean shouldNotFilterAsyncDispatch() {
+        return false; // 비동기 dispatch에서도 필터 실행
+    }
+
+    @Override
+    protected boolean shouldNotFilterErrorDispatch() {
+        return false; // 에러 dispatch에서도 필터 실행
+    }
 }

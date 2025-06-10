@@ -38,8 +38,9 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable()) // CSRF 비활성화 (JWT 사용 시 일반적으로 비활성화)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)) // 세션 사용 안 함
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/**","/auth/**", "/oauth2/**", "/login/oauth2/**").permitAll() // 로그인/인증 관련 경로는 허용
+                        .requestMatchers("/auth/**", "/oauth2/**", "/login/oauth2/**").permitAll() // 로그인/인증 관련 경로는 허용
                         .requestMatchers("/public/**").permitAll() // 공개 API 경로
+                        .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated() // 그 외 모든 요청은 인증 필요
                 );
 
@@ -60,6 +61,7 @@ public class SecurityConfig {
         // ));
         configuration.setAllowedOrigins(Arrays.asList(
             "https://cpyt.sytes.net",
+            "https://cpyt.sytes.net:444",
             "http://localhost:3000"
         ));
 
