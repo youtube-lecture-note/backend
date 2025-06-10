@@ -42,21 +42,27 @@ public interface QuizAttemptRepository  extends JpaRepository<QuizAttempt,Long> 
      */
     @Query("""
         SELECT
-          qs.id AS quizSetId,
-          qs.attemptTime AS date,
-          COUNT(qa.id) AS totalQuizzes,
-          SUM(CASE WHEN qa.isCorrect = false THEN 1 ELSE 0 END) AS wrongCount 
+        q.youtubeId AS youtubeId,
+        COALESCE(uvc.userVideoName, q.youtubeId) AS userVideoName,
+        v.id AS videoId,
+        qs.attemptTime AS date,
+        qs.id AS quizSetId,
+        COUNT(qa.id) AS totalQuizzes,
+        SUM(CASE WHEN qa.isCorrect = false THEN 1 ELSE 0 END) AS wrongCount
         FROM QuizAttempt qa
         JOIN qa.quizSet qs
         JOIN qa.quiz q
+        JOIN Video v ON q.youtubeId = v.youtubeId
+        LEFT JOIN UserVideoCategory uvc ON uvc.video.id = v.id AND uvc.user.id = :userId
         WHERE qs.user.id = :userId
-          AND q.youtubeId = :youtubeId
-        GROUP BY qs.id, qs.attemptTime
+        AND q.youtubeId = :youtubeId
+        GROUP BY q.youtubeId, uvc.userVideoName, v.id, qs.attemptTime, qs.id
         ORDER BY qs.attemptTime DESC
     """)
     List<QuizHistorySummaryDto> findQuizSetSummariesByUserIdAndYoutubeId(
             @Param("userId") Long userId,
             @Param("youtubeId") String youtubeId);
+
 
 
     /**

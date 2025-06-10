@@ -47,7 +47,7 @@ public class QuizAttemptService {
     }
 
     //userId, youtubeId로 특정 비디오 관련 퀴즈 기록 조회
-    public List<QuizHistorySummaryDto> getVideoQuizHistorySummaries(Long userId, String youtubeId) {
+    public List<QuizHistorySummaryDto> getQuizHistorySummaries(Long userId, String youtubeId) {
         return quizAttemptRepository.findQuizSetSummariesByUserIdAndYoutubeId(userId, youtubeId);
     }
 

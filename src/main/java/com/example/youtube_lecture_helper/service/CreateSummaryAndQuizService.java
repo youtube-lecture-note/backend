@@ -70,6 +70,36 @@ public class CreateSummaryAndQuizService {
             });
     }
 
+    //front에서 subtitle 전달
+    public Mono<SummaryResult> initiateVideoProcessingGivenSubtitle(Long userId, String videoId, String language, String subtitle) {
+        log.info("Request received to process videoId: {}", videoId);
+
+        // Step 0: Ban 체크
+        return checkIfBanned(videoId)
+            .flatMap(banOpt -> {
+                if (banOpt.isPresent()) {
+                    log.warn("VideoId {} is banned. Skipping summary.", videoId);
+                    // 금지된 영상이면 바로 결과 반환 (원하는 메시지/상태로)
+                    return Mono.just(new SummaryResult(SummaryStatus.BANNED, "This video is banned."));
+                }
+                // Step 1: Summary DB 체크
+                return checkDatabaseForExistingSummary(videoId)
+                    .switchIfEmpty(Mono.defer(() -> {
+                        // Step 2: 캐시/요약 생성
+                        log.debug("No summary in DB for videoId: {}. Checking active processing cache.", videoId);
+                        return processingCache.computeIfAbsent(videoId, key -> {
+                            log.info("No active processing found for videoId: {}. Starting summary generation.", key);
+                            return generateSummaryAndTriggerQuizProcessingGivenSubtitle(userId, key, language,subtitle)
+                                    .doFinally(signal -> {
+                                        log.info("Summary processing signal {} for videoId: {}. Removing from active cache.", signal, key);
+                                        processingCache.remove(key);
+                                    })
+                                    .cache();
+                        });
+                    }));
+            });
+    }
+
     /**
      * Checks the database ONLY for an existing video summary.
      *
@@ -99,6 +129,47 @@ public class CreateSummaryAndQuizService {
     private Mono<SummaryResult> generateSummaryAndTriggerQuizProcessing(Long userId, String videoId, String language) {
         log.debug("Executing summary generation pipeline for videoId: {}", videoId);
         return reactiveGptClient.getVideoSummaryReactive(videoId, language)
+                .flatMap(summaryResult -> {
+                    if (summaryResult.isSuccess()) {
+                        log.info("Summary successful for videoId: {}. Saving to DB first.", videoId);
+                        // *** 먼저 summary를 DB에 저장 ***
+                        return saveSummaryToDatabase(videoId, summaryResult)
+                            .then(Mono.fromCallable(() -> {
+                                // 퀴즈 생성 캐시 확인
+                                quizProcessingCache.computeIfAbsent(videoId, key -> {
+                                    log.info("Starting quiz generation for videoId: {}", key);
+                                    return generateQuizzesInBackground(userId, key, language, summaryResult)
+                                            .doFinally(signal -> {
+                                                log.info("Quiz processing completed for videoId: {}. Removing from cache.", key);
+                                                quizProcessingCache.remove(key);
+                                            });
+                                }).subscribeOn(Schedulers.boundedElastic())
+                                .subscribe(
+                                        vd -> log.info("Background quiz generation completed for videoId: {}", videoId),
+                                        err -> log.error("Background quiz generation failed for videoId: {}", videoId, err)
+                                );
+                                return summaryResult;
+                            }));
+                    } else {
+                        log.warn("Summary generation failed for videoId: {} with status: {}.", videoId, summaryResult.getStatus());
+                        return Mono.just(summaryResult);
+                    }
+                })
+                .onErrorResume(exception -> {
+                    log.error("Critical error during summary phase for videoId: {}.", videoId, exception);
+                    SummaryResult errorSummary = new SummaryResult(SummaryStatus.FAILED, "Error during summary: " + exception.getMessage());
+                    return Mono.just(errorSummary);
+                })
+                .timeout(Duration.ofMinutes(5), Mono.defer(() -> {
+                    log.error("Summary generation timed out for videoId: {}", videoId);
+                    SummaryResult timeoutSummary = new SummaryResult(SummaryStatus.FAILED, "Summary generation timed out after 5 minutes");
+                    return Mono.just(timeoutSummary);
+                }));
+    }
+
+    private Mono<SummaryResult> generateSummaryAndTriggerQuizProcessingGivenSubtitle(Long userId, String videoId, String language,String subtitle) {
+        log.debug("Executing summary generation pipeline for videoId: {}", videoId);
+        return reactiveGptClient.getVideoSummaryReactiveGivenSubtitle(videoId, language, subtitle)
                 .flatMap(summaryResult -> {
                     if (summaryResult.isSuccess()) {
                         log.info("Summary successful for videoId: {}. Saving to DB first.", videoId);

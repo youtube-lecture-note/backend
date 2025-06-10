@@ -14,4 +14,7 @@ public class UserStatisticsDto {
     private Integer totalAttempts;
     private Integer correctAttempts;
     private BigDecimal accuracyRate;
+    private Integer studiedVideoCount;
+    private Double accuracyPercentileRank;
+    private Double videosPercentileRank;
 }

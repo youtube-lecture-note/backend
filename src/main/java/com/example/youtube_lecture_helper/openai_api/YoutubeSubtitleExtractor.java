@@ -57,7 +57,7 @@ public class YoutubeSubtitleExtractor {
 
     // This method now calls your Python API
     private String fetchTranscriptFromApi(String videoID, String lang) throws IOException, InterruptedException {
-        String apiUrl = transcriptApiBaseUrl + "/transcript?video_id=" + videoID;
+        String apiUrl = transcriptApiBaseUrl + "/api/transcript/" + videoID;
         System.out.println("DEBUG: Fetching transcript from API URL: " + apiUrl);
 
         HttpRequest request = HttpRequest.newBuilder()
@@ -93,13 +93,45 @@ public class YoutubeSubtitleExtractor {
             for (int i = 0; i < transcriptArray.length(); i++) {
                 JSONObject entry = transcriptArray.getJSONObject(i);
                 // The Python API now directly gives integer 'start' and 'text'
-                int start = entry.getInt("start"); // Already an int from Python API
+                double start = entry.getDouble("offset"); // Already an int from Python API
                 String text = entry.getString("text");
-                allLines.add(new SubtitleLine(start, text));
+                allLines.add(new SubtitleLine((int)start, text));
             }
         } catch (JSONException e) {
             System.err.println("Error parsing JSON response from transcript API: " + e.getMessage());
             System.err.println("Received JSON String: " + transcriptJsonString);
+            throw new RuntimeException("Error parsing JSON from transcript API: " + e.getMessage(), e);
+        }
+
+        if (allLines.isEmpty()) {
+            // This case might happen if the API returns an empty list for a 2xx response,
+            // though the Python API should return 404 if no transcript.
+            System.out.println("No subtitle lines found for video " + videoID + " even after API call.");
+            // Decide how to handle: throw exception or return empty list of lists
+            throw new RuntimeException("No subtitles found for video: " + videoID + " (API returned empty list)");
+        }
+
+        // The chunking logic from your original parseTranscript can now be applied directly
+        return chunkSubtitles(allLines);
+    }
+
+    public List<List<SubtitleLine>> buildSubtitleList(String videoID, String lang, String subtitles) throws IOException, InterruptedException {
+        if (lang == null || lang.trim().isEmpty()) {
+            lang = "ko"; // Default language
+        }
+
+        List<SubtitleLine> allLines = new ArrayList<>();
+        try {
+            JSONArray transcriptArray = new JSONArray(subtitles);
+            for (int i = 0; i < transcriptArray.length(); i++) {
+                JSONObject entry = transcriptArray.getJSONObject(i);
+                double start = entry.getDouble("offset"); 
+                String text = entry.getString("text");
+                allLines.add(new SubtitleLine((int)start, text));
+            }
+        } catch (JSONException e) {
+            System.err.println("Error parsing JSON response from transcript API: " + e.getMessage());
+            System.err.println("Received JSON String: " + subtitles);
             throw new RuntimeException("Error parsing JSON from transcript API: " + e.getMessage(), e);
         }
 

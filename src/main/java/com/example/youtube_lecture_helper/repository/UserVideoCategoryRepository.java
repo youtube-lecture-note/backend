@@ -43,4 +43,7 @@ public interface UserVideoCategoryRepository extends JpaRepository<UserVideoCate
     Optional<UserVideoCategory> findByUserIdAndVideoId(Long userId, Long videoId);
 
     void deleteByVideoId(Long videoId);
+
+    @Query("SELECT COUNT(DISTINCT uvc.video.id) FROM UserVideoCategory uvc WHERE uvc.user.id = :userId")
+    Integer countStudiedVideosByUserId(@Param("userId") Long userId);
 }

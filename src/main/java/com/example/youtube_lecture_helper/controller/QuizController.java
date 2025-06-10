@@ -33,36 +33,37 @@ public class QuizController {
         return ResponseEntity.ok(quizService.getQuizCountByYoutubeId(videoId));
     }
     //퀴즈 생성 (단일 난이도)
-    @GetMapping("/api/quizzes")
-    public ResponseEntity<ApiResponse<QuizService.CreatedQuizSetDTO>> getQuizzesWithDifficultyAndCount(
-            @RequestParam String videoId,
-            @RequestParam int difficulty,
-            @RequestParam int count,
-            @AuthenticationPrincipal UserDetails userDetails
-    ){
-        Long userId = ((CustomUserDetails) userDetails).getId();
+//     @GetMapping("/api/quizzes")
+//     public ResponseEntity<ApiResponse<QuizService.CreatedQuizSetDTO>> getQuizzesWithDifficultyAndCount(
+//             @RequestParam String videoId,
+//             @RequestParam int difficulty,
+//             @RequestParam int count,
+//             @AuthenticationPrincipal UserDetails userDetails
+//     ){
+//         Long userId = ((CustomUserDetails) userDetails).getId();
         
-        if(createSummaryAndQuizService.isQuizProcessing(videoId)) {
-            return ApiResponse.buildResponse(
-                    HttpStatus.BAD_REQUEST,
-                    "퀴즈를 생성 중입니다.",
-                    null
-            );
-        }
-        QuizService.CreatedQuizSetDTO quizzes = quizService.createQuizSetForUser(
-                userId,difficulty,videoId,count,false
-        );
-        return ApiResponse.buildResponse(HttpStatus.OK,"success",quizzes);
-    }
+//         if(createSummaryAndQuizService.isQuizProcessing(videoId)) {
+//             return ApiResponse.buildResponse(
+//                     HttpStatus.BAD_REQUEST,
+//                     "퀴즈를 생성 중입니다.",
+//                     null
+//             );
+//         }
+//         QuizService.CreatedQuizSetDTO quizzes = quizService.createQuizSetForUser(
+//                 userId,difficulty,videoId,count,false
+//         );
+//         return ApiResponse.buildResponse(HttpStatus.OK,"success",quizzes);
+//     }
 
-    //퀴즈 생성(여러 난이도, 여러 유저용)
-    @GetMapping("/api/quizzes/multi-create")
+    //퀴즈 생성(여러 난이도)
+    @GetMapping("/api/quizzes")
     public ResponseEntity<ApiResponse<QuizService.CreatedQuizSetDTO>> createQuizSetByCounts(
             @RequestParam String videoId,
             @RequestParam int level1Count,
             @RequestParam int level2Count,
             @RequestParam int level3Count,
             @RequestParam String quizSetName,
+            @RequestParam(defaultValue = "false") boolean isMulti,
             @AuthenticationPrincipal UserDetails userDetails
     ) {
         if(createSummaryAndQuizService.isQuizProcessing(videoId)) {
@@ -74,7 +75,7 @@ public class QuizController {
         }
         Long userId = ((CustomUserDetails) userDetails).getId();
         QuizService.CreatedQuizSetDTO quizzes = quizService.createQuizSetForUserByCounts(
-                userId, videoId, level1Count, level2Count, level3Count, true, quizSetName
+                userId, videoId, level1Count, level2Count, level3Count, isMulti, quizSetName
         );
         return ApiResponse.buildResponse(HttpStatus.OK, "success", quizzes);
     }
@@ -113,22 +114,21 @@ public class QuizController {
         return ResponseEntity.ok(quizAttemptService.getQuizAttemptDetails(quizSetId,userId));
     }
     
-    //userId로 해당 유저의 전체 퀴즈 기록 조회
+    //userId(+youtubeId)로 해당 유저의 전체 퀴즈 기록 조회
     @GetMapping("/api/quizzes/attempts/summaries")
     public ResponseEntity<List<QuizHistorySummaryDto>> getQuizAttempts(
-            @AuthenticationPrincipal UserDetails userDetails) {
+        @RequestParam(required = false) String youtubeId,
+        @AuthenticationPrincipal UserDetails userDetails) {
+    
         Long userId = ((CustomUserDetails) userDetails).getId();
-        return ResponseEntity.ok(quizAttemptService.getQuizHistorySummaries(userId));
-    }
-
-    //youtubeId, videoId로 해당 유저가 해당 비디오에 푼 기록들 조회
-    @GetMapping("/api/quizzes/attempts/videos/{youtubeId}")
-    public ResponseEntity<List<QuizHistorySummaryDto>> getQuizAttemptsByVideoId(
-            @PathVariable String youtubeId,
-            @AuthenticationPrincipal UserDetails userDetails
-    ) {
-        Long userId = ((CustomUserDetails) userDetails).getId();
-        return ResponseEntity.ok(quizAttemptService.getVideoQuizHistorySummaries(userId, youtubeId));
+        
+        if (youtubeId != null && !youtubeId.isEmpty()) {
+            // 특정 비디오의 퀴즈 기록 조회
+            return ResponseEntity.ok(quizAttemptService.getQuizHistorySummaries(userId, youtubeId));
+        } else {
+            // 기본 요청: 전체 퀴즈 기록 조회
+            return ResponseEntity.ok(quizAttemptService.getQuizHistorySummaries(userId));
+        }
     }
     //한명이 quizSet 생성 요청하면 QuizSetMulti 생성
     @GetMapping("/api/quizzes/multi/create")

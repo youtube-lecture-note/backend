@@ -183,6 +183,7 @@ public class QuizService {
             QuizAttempt attempt = new QuizAttempt();
             attempt.setQuizSet(savedQuizSet);
             attempt.setQuiz(quiz);
+            attempt.setUser(user);
             return attempt;
         }).toList();
 
