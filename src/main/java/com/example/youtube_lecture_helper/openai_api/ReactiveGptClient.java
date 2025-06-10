@@ -31,7 +31,7 @@ public class ReactiveGptClient {
     private static final String API_URL = "https://api.openai.com/v1/chat/completions";
     private static final String API_KEY = System.getenv("OPENAI_API_KEY");
     private static final String quizModel = "gpt-4o-2024-08-06";
-    private static final String summaryModel = "gpt-4o-mini";
+    private static final String summaryModel = "gpt-4o-mini-2024-07-18";
     private final YoutubeSubtitleExtractor youtubeSubtitleExtractor;
 
 
@@ -203,6 +203,31 @@ public class ReactiveGptClient {
         // Step 1: Get subtitles. Assume getSubtitles might be blocking.
         // Use Mono.fromCallable and subscribeOn to run it on a suitable scheduler.
         return Mono.fromCallable(() -> youtubeSubtitleExtractor.getSubtitles(videoId, language))
+                .subscribeOn(Schedulers.boundedElastic()) // Schedule blocking call off the event loop
+                .doOnSubscribe(s -> log.info("Starting subtitle extraction for videoId: {}", videoId))
+                .doOnError(e -> log.error("Failed to get subtitles for videoId: {}", videoId, e))
+                .onErrorResume(e -> Mono.just(Collections.<List<SubtitleLine>>emptyList())) // Handle subtitle extraction failure
+                .flatMap(subtitleChunks -> {
+                    if (subtitleChunks.isEmpty()) {
+                        log.warn("No subtitles found or extraction failed for videoId: {}", videoId);
+                        // Determine if this means NO_SUBTITLE or if the callable already handled specific errors
+                        // Returning NO_SUBTITLE based on original logic's exception handling
+                        return Mono.just(new SummaryResult(SummaryStatus.NO_SUBTITLE, null));
+                    }
+                    log.info("Subtitle chunks obtained for videoId: {}. Processing {} chunks.", videoId, subtitleChunks.size());
+                    return processSubtitleChunksReactive(subtitleChunks);
+                })
+                .doOnSuccess(result -> log.info("Summary processing completed for videoId: {} with status: {}", videoId, result.getStatus()))
+                .doOnError(e -> log.error("Error during summary processing pipeline for videoId: {}", videoId, e));
+        // Add a timeout for the entire operation if desired
+        // .timeout(Duration.ofMinutes(5));
+    }
+
+    //DO NOT GENERATE SUBTITLE INSIDE, it is done in frontend
+    public Mono<SummaryResult> getVideoSummaryReactiveGivenSubtitle(String videoId, String language, String subtitles) {
+        // Step 1: Get subtitles. Assume getSubtitles might be blocking.
+        // Use Mono.fromCallable and subscribeOn to run it on a suitable scheduler.
+        return Mono.fromCallable(() -> youtubeSubtitleExtractor.buildSubtitleList(videoId, language, subtitles))
                 .subscribeOn(Schedulers.boundedElastic()) // Schedule blocking call off the event loop
                 .doOnSubscribe(s -> log.info("Starting subtitle extraction for videoId: {}", videoId))
                 .doOnError(e -> log.error("Failed to get subtitles for videoId: {}", videoId, e))
@@ -399,7 +424,7 @@ public class ReactiveGptClient {
     // (Keep your existing prompt generation methods)
 
     private String generateSummarySystemPrompt() {
-    return "You are an AI assistant that summarizes lecture videos into concise, structured notes.\n"
+    return "You are an AI assistant that summarizes lecture videos into concise, structured notes who communicates in Korean.\n"
          + "Each input consists of timestamped subtitles in the format: time (in seconds) and corresponding text.\n"
          + "Your task is to identify and summarize only the parts of the video that are related to lectures or knowledge-based topics.\n"
          + "If a section is not part of a lecture (e.g., unrelated conversation, advertisements, casual chatter), ignore it.\n"
@@ -434,10 +459,15 @@ public class ReactiveGptClient {
                     "각 문제는 정확하게 다음 형식으로 작성해주세요. 줄바꿈 없이 한 줄로 출력하며, 숫자나 항목 앞에는 불필요한 마크업 없이:\n" +
                     "[Question];[1. Option 1];[2. Option 2];[3. Option 3];[4. Option 4];[Answer Option Number];[Explanation of correct answer];[Timestamp in seconds];[Difficulty Level 1~3]\n\n" +
 
+                    "[Explanation of correct answer] 부분은 다음을 포함하여 상세히 작성해주세요:\n" +
+                    "1. 정답이 맞는 이유에 대한 명확한 설명\n" +
+                    "2. 각 오답 선택지가 틀린 이유 (간략하게)\n" +
+                    "3. 관련 개념에 대한 추가 설명\n" +
+                    "4. 3-4문장으로 구성하여 학습자의 이해를 돕는 내용\n\n" +
+
                     "예시:\n" +
-                    "분자식은 무엇을 나타내는가?;원자의 성질;분자 내 원자의 종류와 수;물질의 상태;화학 반응의 결과;2;분자식은 분자 내 원자의 종류와 수를 나타냅니다.;10;1\n" +
-                    "양이온과 음이온의 차이는 무엇인가?;양이온은 전자를 얻고, 음이온은 전자를 잃는다.;양이온은 음전하, 음이온은 양전하를 띈다.;양이온은 전자를 잃고, 음이온은 전자를 얻는다.;둘 다 전자를 얻는다.;3;양이온은 전자를 잃고 양전하를, 음이온은 전자를 얻고 음전하를 갖게 됩니다.;120;2\n" +
-                    "어떤 조건에서 이온 결합이 잘 형성되는가?;같은 전기적 성질을 가질 때;공유 전자가 있을 때;전자 친화도와 이온화 에너지 차이가 클 때;원자의 크기가 같을 때;3;이온 결합은 전자를 쉽게 잃는 원자와 잘 받는 원자 사이에서 형성됩니다.;210;3";
+                    "분자식은 무엇을 나타내는가?;원자의 성질;분자 내 원자의 종류와 수;물질의 상태;화학 반응의 결과;2;분자식은 분자 내 원자의 종류와 수를 나타냅니다. 원자의 성질이나 물질의 상태, 화학 반응의 결과는 분자식과 직접적인 관련이 없습니다. 예를 들어 H₂O는 수소 원자 2개와 산소 원자 1개로 구성된 물 분자임을 보여줍니다.;10;1\n" +
+                    "양이온과 음이온의 차이는 무엇인가?;양이온은 전자를 얻고, 음이온은 전자를 잃는다.;양이온은 음전하, 음이온은 양전하를 띈다.;양이온은 전자를 잃고, 음이온은 전자를 얻는다.;둘 다 전자를 얻는다.;3;양이온은 전자를 잃어 양전하를, 음이온은 전자를 얻어 음전하를 갖게 됩니다. 선택지 1번과 2번은 반대로 설명했고, 4번은 둘 다 같은 과정이라고 잘못 기술했습니다. 이온 형성은 원자가 안정한 전자 배치를 얻기 위한 과정입니다.;120;2";
         }
         else if (type == QuizType.SHORT_ANSWER) {
             return "You are an educational quiz generator who communicates in Korean. " +
@@ -456,12 +486,15 @@ public class ReactiveGptClient {
                     "각 문항은 다음 형식으로 한 줄로 출력해주세요:\n" +
                     "[Question];[Correct Answer];[Explanation of the correct answer];[Timestamp in seconds];[Difficulty Level (1~3)]\n\n" +
 
-                    "예시:\n" +
-                    "적혈구의 주요 기능은 무엇인가?;몸 전체에 산소를 운반하는 것.;적혈구는 헤모글로빈을 함유하고 있어 폐에서 산소와 결합하여 몸 전체의 조직으로 운반합니다.;240;1\n" +
-                    "파동함수의 절댓값 제곱이 물리적으로 어떤 의미를 가지며, 이를 통해 얻을 수 있는 예측은 무엇인가?;입자의 위치 확률 분포를 나타내며, 특정 구간에 존재할 확률을 계산할 수 있다.;파동함수의 절댓값 제곱은 해당 위치에서 입자를 발견할 확률 밀도를 의미하므로, 이를 통해 입자의 위치 예측이 가능합니다.;1802;2\n\n" +
+                    "[Explanation of the correct answer] 부분은 다음을 포함해주세요:\n" +
+                    "1. 답안에 대한 구체적인 근거와 설명\n" +
+                    "2. 관련 개념이나 원리에 대한 보충 설명\n" +
+                    "3. 실제 적용 사례나 예시 (가능한 경우)\n" +
+                    "4. 3-4문장으로 구성하여 깊이 있는 이해를 도모\n\n" +
 
-                    "⚠️ Examples of what NOT to do (for reference only — do NOT copy these):\n" +
-                    "- Bad (rote recall): 막스 보른은 슈레딩거 방정식에서 어떤 기여를 했는가?;파동 함수의 절댓값 제곱을 확률 해석에 도입했다.;막스 보른은 파동 함수의 물리적 의미를 확률적으로 해석하는 데 기여했습니다.;1802;1";
+                    "예시:\n" +
+                    "적혈구의 주요 기능은 무엇인가?;몸 전체에 산소를 운반하는 것.;적혈구는 헤모글로빈을 함유하고 있어 폐에서 산소와 결합하여 몸 전체의 조직으로 운반합니다. 헤모글로빈의 철 이온이 산소 분자와 가역적으로 결합할 수 있기 때문에 이런 기능이 가능합니다. 이 과정은 호흡과 세포 대사에 필수적인 역할을 합니다.;240;1\n" +
+                    "파동함수의 절댓값 제곱이 물리적으로 어떤 의미를 가지며, 이를 통해 얻을 수 있는 예측은 무엇인가?;입자의 위치 확률 분포를 나타내며, 특정 구간에 존재할 확률을 계산할 수 있다.;파동함수의 절댓값 제곱은 해당 위치에서 입자를 발견할 확률 밀도를 의미합니다. 막스 보른의 확률 해석에 따르면, 이 값을 적분하면 특정 영역에서 입자를 발견할 확률을 구할 수 있습니다. 이는 양자역학의 근본적인 불확정성을 수학적으로 표현한 것으로, 고전 물리학과 구별되는 핵심 개념입니다.;1802;2";
         }
         return "";
     }
