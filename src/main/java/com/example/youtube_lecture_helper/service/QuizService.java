@@ -30,8 +30,13 @@ public class QuizService {
 
     private final RedisService redisService;
 
-    public QuizCountDto getQuizCountByYoutubeId(String youtubeId){
-        List<QuizCountByDifficultyDto> quizCountByDifficultyDtos = quizRepository.countQuizzesByDifficultyAndYoutubeId(youtubeId);
+    public QuizCountDto getQuizCountByYoutubeId(String youtubeId, Long userId, boolean isRemaining) {
+        List<QuizCountByDifficultyDto> quizCountByDifficultyDtos;
+        if (isRemaining) {
+            quizCountByDifficultyDtos = quizRepository.countQuizzesRemainingByDifficultyAndYoutubeId(youtubeId, userId);
+        } else {
+            quizCountByDifficultyDtos = quizRepository.countQuizzesByDifficultyAndYoutubeId(youtubeId);
+        }
         long level1 = 0L, level2 = 0L, level3 = 0L;
         for(QuizCountByDifficultyDto dto: quizCountByDifficultyDtos){
             switch(dto.getDifficulty()){
@@ -121,16 +126,28 @@ public class QuizService {
             int level2Count,
             int level3Count,
             boolean isForMultiUsers,
-            String name
+            String name,
+            boolean onlyUnsolvedQuizzes
     ) {
         // 1. Fetch the User
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException("User not found with id: " + userId));
+        List<Quiz> level1Quizzes;
+        List<Quiz> level2Quizzes;
+        List<Quiz> level3Quizzes;
+        
+        //List<Quiz> 모두 가져온 뒤 랜덤하게 개수 select 하기
+        // 2. Fetch quizzes by difficulty & unsolved quizzes if required
+        if(onlyUnsolvedQuizzes){
+            level1Quizzes = quizRepository.findUnsolvedQuizzesByDifficultyAndYoutubeIdNative(1, youtubeId, userId);
+            level2Quizzes = quizRepository.findUnsolvedQuizzesByDifficultyAndYoutubeIdNative(2, youtubeId, userId);
+            level3Quizzes = quizRepository.findUnsolvedQuizzesByDifficultyAndYoutubeIdNative(3, youtubeId, userId);
 
-        // 2. Fetch quizzes by difficulty
-        List<Quiz> level1Quizzes = quizRepository.findByDifficultyAndYoutubeId(1, youtubeId);
-        List<Quiz> level2Quizzes = quizRepository.findByDifficultyAndYoutubeId(2, youtubeId);
-        List<Quiz> level3Quizzes = quizRepository.findByDifficultyAndYoutubeId(3, youtubeId);
+        }else{  //중복 허용
+            level1Quizzes = quizRepository.findByDifficultyAndYoutubeId(1, youtubeId);
+            level2Quizzes = quizRepository.findByDifficultyAndYoutubeId(2, youtubeId);
+            level3Quizzes = quizRepository.findByDifficultyAndYoutubeId(3, youtubeId);
+        }
 
         // 3. Check if enough quizzes are available for each level
         if (level1Quizzes.size() < level1Count) {

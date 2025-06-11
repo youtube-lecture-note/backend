@@ -29,9 +29,13 @@ public class QuizController {
     //난이도별 퀴즈 개수 반환
     @GetMapping("/api/quizzes/count")
     public ResponseEntity<QuizCountDto> getQuizCount(
-            @RequestParam String videoId, @AuthenticationPrincipal UserDetails userDetails){
-        return ResponseEntity.ok(quizService.getQuizCountByYoutubeId(videoId));
+            @RequestParam String videoId,
+            @RequestParam(defaultValue = "false") boolean isRemaining,
+            @AuthenticationPrincipal UserDetails userDetails){
+        Long userId = ((CustomUserDetails) userDetails).getId();
+        return ResponseEntity.ok(quizService.getQuizCountByYoutubeId(videoId,userId, isRemaining));
     }
+
     //퀴즈 생성 (단일 난이도)
 //     @GetMapping("/api/quizzes")
 //     public ResponseEntity<ApiResponse<QuizService.CreatedQuizSetDTO>> getQuizzesWithDifficultyAndCount(
@@ -63,7 +67,8 @@ public class QuizController {
             @RequestParam int level2Count,
             @RequestParam int level3Count,
             @RequestParam String quizSetName,
-            @RequestParam(defaultValue = "false") boolean isMulti,
+            @RequestParam(defaultValue = "false") boolean isMulti,      //여러 유저 푸는 공동 퀴즈인지?
+            @RequestParam(defaultValue = "false") boolean isRemaining,  //아직 풀지 않은 퀴즈만 생성
             @AuthenticationPrincipal UserDetails userDetails
     ) {
         if(createSummaryAndQuizService.isQuizProcessing(videoId)) {
@@ -75,7 +80,7 @@ public class QuizController {
         }
         Long userId = ((CustomUserDetails) userDetails).getId();
         QuizService.CreatedQuizSetDTO quizzes = quizService.createQuizSetForUserByCounts(
-                userId, videoId, level1Count, level2Count, level3Count, isMulti, quizSetName
+                userId, videoId, level1Count, level2Count, level3Count, isMulti, quizSetName, isRemaining
         );
         return ApiResponse.buildResponse(HttpStatus.OK, "success", quizzes);
     }
