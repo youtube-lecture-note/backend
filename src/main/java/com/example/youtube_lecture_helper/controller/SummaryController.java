@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import java.util.Map;
 import java.time.Duration;
 
 @RestController
@@ -28,19 +29,19 @@ public class SummaryController {
     private final CreateSummaryAndQuizService createSummaryAndQuizService;
     private final VideoService videoService;
 
-    // @GetMapping(value = "/api/summary", produces = "application/json")
-    // //ApiResponse<String>
-    // public ResponseEntity<ApiResponse<String>> getSummary(@RequestParam String videoId) {
-    //     SummaryResult summaryResult = videoService.getSummary(videoId);
-    //     if(summaryResult.getStatus()== SummaryStatus.NO_SUBTITLE){
-    //         return ApiResponse.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR,"자막 없음","");
-    //     }
-    //     if(summaryResult.getStatus()== SummaryStatus.NOT_LECTURE){
-    //         return ApiResponse.buildResponse(HttpStatus.BAD_REQUEST, "강의 영상 아님", "");
-    //     }
-    //     System.out.println("summary: " + summaryResult.getSummary());
-    //     return ApiResponse.buildResponse(HttpStatus.OK, "성공", summaryResult.getSummary());
-    // }
+    /** userVideoName을 수정하는 메소드: /api/videos/${videoId}/title */
+    @PutMapping("/api/videos/{youtubeId}/title")
+    public ResponseEntity<?> updateUserVideoName(
+            @PathVariable String youtubeId,
+            @RequestBody Map<String, String> request,
+            @AuthenticationPrincipal UserDetails userDetails) 
+    {
+        Long userId = ((CustomUserDetails) userDetails).getId();
+        String title = request.get("title");
+        videoService.updateUserVideoName(youtubeId, userId, title);
+        
+        return ResponseEntity.ok().body(Map.of("message", "Video title updated successfully"));
+    }
 
     @GetMapping(value="/api/summary")
     public Mono<ResponseEntity<ApiResponse<String>>> processVideo(
@@ -167,50 +168,5 @@ public class SummaryController {
     ){
         return ApiResponse.<String>buildResponse(HttpStatus.OK, "성공", videoService.getVideoSummaryById(id));
     }
-
-//    @GetMapping(value="/api/summary/test")
-//    public Mono<ResponseEntity<ApiResponse<String>>> processVideoTest(
-//            @RequestParam String videoId) {
-//        log.info("Received async request to process video: {}", videoId);
-//        Long userId = 1L;
-//
-//        // 서비스 호출하여 요약 결과 Mono 받기
-//        return createSummaryAndQuizService.initiateVideoProcessing(videoId, "ko")
-//                .flatMap(summaryResult -> {
-//                    // SummaryResult 상태에 따라 처리
-//                    return switch (summaryResult.getStatus()) {
-//                        case SUCCESS -> {
-//                            log.info("Successfully generated summary for videoId: {}. Responding OK.", videoId);
-//                            yield Mono.just(ApiResponse.<String>buildResponse(
-//                                    HttpStatus.OK, "성공", summaryResult.getSummary()));
-//                        }
-//                        case NO_SUBTITLE -> {
-//                            log.warn("Summary generation failed for videoId: {}. Reason: No Subtitles.", videoId);
-//                            yield Mono.just(ApiResponse.<String>buildResponse(
-//                                    HttpStatus.INTERNAL_SERVER_ERROR, "자막 없음", null));
-//                        }
-//                        case NOT_LECTURE -> {
-//                            log.warn("Summary generation failed for videoId: {}. Reason: Not a lecture video.", videoId);
-//                            yield Mono.just(ApiResponse.<String>buildResponse(
-//                                    HttpStatus.BAD_REQUEST, "강의 영상 아님", null));
-//                        }
-//                        case FAILED, PROCESSING -> {
-//                            log.warn("Summary generation failed or is still processing for videoId: {}. Status: {}",
-//                                    videoId, summaryResult.getStatus());
-//                            String errorMessage = (summaryResult.getSummary() != null && !summaryResult.getSummary().isBlank())
-//                                    ? summaryResult.getSummary()
-//                                    : "요약 생성 실패 또는 진행 중";
-//                            yield Mono.just(ApiResponse.<String>buildResponse(
-//                                    HttpStatus.INTERNAL_SERVER_ERROR, errorMessage, null));
-//                        }
-//                    };
-//                })
-//                .onErrorResume(e -> {
-//                    log.error("Unhandled exception during reactive processing initiation for videoId: {}", videoId, e);
-//                    String errorMessage = "서버 내부 오류 발생: " + e.getMessage();
-//                    return Mono.just(ApiResponse.<String>buildResponse(
-//                            HttpStatus.INTERNAL_SERVER_ERROR, errorMessage, null));
-//                });
-//    }
 
 }

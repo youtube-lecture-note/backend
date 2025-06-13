@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -17,13 +18,12 @@ public class RedisService {
     private static final long TTL_SECONDS = 600; // 10분
 
     // 키 생성
-    public String generateQuizKey(Long quizSetId) {
+    public String generateQuizKey(Long quizSetId, long ttlSeconds) {
         String key;
         do {
             key = generateRandomNumericKey();
         } while (redisTemplate.hasKey("quizkey:" + key)); // 충돌 방지
-
-        redisTemplate.opsForValue().set("quizkey:" + key, quizSetId.toString(), Duration.ofSeconds(TTL_SECONDS));
+        redisTemplate.opsForValue().set("quizkey:" + key, quizSetId.toString(), ttlSeconds, TimeUnit.SECONDS);
         return key;
     }
 

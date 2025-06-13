@@ -132,7 +132,7 @@ public class CreateSummaryAndQuizService {
                 .flatMap(summaryResult -> {
                     if (summaryResult.isSuccess()) {
                         log.info("Summary successful for videoId: {}. Saving to DB first.", videoId);
-                        // *** 먼저 summary를 DB에 저장 ***
+                        // *** 먼저 summary를 DB에 저장 후 반환을 보장 ***
                         return saveSummaryToDatabase(videoId, summaryResult)
                             .then(Mono.fromCallable(() -> {
                                 // 퀴즈 생성 캐시 확인

@@ -46,4 +46,8 @@ public interface UserVideoCategoryRepository extends JpaRepository<UserVideoCate
 
     @Query("SELECT COUNT(DISTINCT uvc.video.id) FROM UserVideoCategory uvc WHERE uvc.user.id = :userId")
     Integer countStudiedVideosByUserId(@Param("userId") Long userId);
+
+    Optional<UserVideoCategory> findByVideoIdAndUserId(Long videoId, Long userId);
+    
+    boolean existsByCategoryIdAndVisibleIsTrue(Long categoryId);
 }

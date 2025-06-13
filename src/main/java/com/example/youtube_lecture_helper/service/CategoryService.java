@@ -238,25 +238,23 @@ public class CategoryService {
         userVideoCategoryRepository.save(userVideoCategory);
     }
 
-    //카테고리 삭제 : 밑에 비디오 없으면 삭제 불가능하게 바꿈
+    //카테고리 삭제 : 밑에 비디오 있어도 삭제하기
     @Transactional
     public void removeCategory(Long userId, Long categoryId) {
-        Optional<Category> removeCategory = categoryRepository.findById(categoryId);
-        if (removeCategory.isEmpty()) {
-            throw new EntityNotFoundException("해당하는 카테고리가 존재하지 않음");
-        }
-        if (!Objects.equals(removeCategory.get().getUser().getId(), userId)) {
+        Category removeCategory = categoryRepository.findById(categoryId)
+                .orElseThrow(() -> new EntityNotFoundException("해당하는 카테고리가 존재하지 않음"));
+        if (!Objects.equals(removeCategory.getUser().getId(), userId)) {
             throw new AccessDeniedException("해당 동작을 실행할 권한이 없음");
         }
 
-        // UserVideoCategory에 (category, video) 쌍이 하나라도 있으면 삭제 불가
-        List<UserVideoCategory> entry = userVideoCategoryRepository.findByCategoryId(categoryId);
-        if (!entry.isEmpty()) {
-            throw new IllegalStateException("해당 카테고리에 연결된 비디오가 있어 삭제할 수 없습니다.");
+        // 3. [수정된 로직] 카테고리에 '공개된(visible=true)' 비디오가 연결되어 있는지 확인
+        if (userVideoCategoryRepository.existsByCategoryIdAndVisibleIsTrue(categoryId)) {
+            throw new IllegalStateException("공개된 비디오가 연결되어 있어 카테고리를 삭제할 수 없습니다.");
         }
-
-        // 카테고리 삭제
-        categoryRepository.delete(removeCategory.get());
+        // 4. 카테고리 삭제
+        // 이 시점에서는 해당 카테고리에 연결된 비디오가 없거나, 있더라도 모두 'visible=false' 상태입니다.
+        // 'ON DELETE SET NULL' 제약조건에 따라 'visible=false'인 항목들의 category_id는 NULL로 설정됩니다.
+        categoryRepository.delete(removeCategory);
     }
     /*
     video id, user id로 카테고리 id 조회

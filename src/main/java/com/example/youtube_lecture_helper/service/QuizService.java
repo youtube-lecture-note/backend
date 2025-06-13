@@ -48,75 +48,6 @@ public class QuizService {
         return new QuizCountDto(level1,level2,level3);
     }
 
-    @Transactional // Ensure all DB operations succeed or fail together
-    public CreatedQuizSetDTO createQuizSetForUser(Long userId, int difficulty, String youtubeId, int numberOfQuestions, boolean isForMultiUsers) {
-
-        // 1. Fetch the User
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException("User not found with id: " + userId)); // Example exception
-
-        // 2. Fetch Candidate Quizzes
-        List<Quiz> candidateQuizzes = quizRepository.findByDifficultyAndYoutubeId(difficulty, youtubeId);
-
-        // 3. Check if enough quizzes are available
-        if (candidateQuizzes.isEmpty()) {
-            throw new QuizNotFoundException("No quizzes found for the given criteria."); // Example exception
-        }
-        if (candidateQuizzes.size() < numberOfQuestions) {
-            // Decide: Throw an error or just use all available quizzes?
-            // Let's use all available for this example. Adjust if needed.
-            numberOfQuestions = candidateQuizzes.size();
-            // Or: throw new InsufficientQuizzesException("Not enough quizzes found. Required: " + numberOfQuestions + ", Found: " + candidateQuizzes.size());
-        }
-
-        // 4. Select Randomly
-        Collections.shuffle(candidateQuizzes); // Shuffle the list in place
-        List<Quiz> selectedQuizzes = candidateQuizzes.subList(0, numberOfQuestions);
-
-        // 5. Create Quiz Set
-        QuizSet quizSet = new QuizSet();
-        quizSet.setUser(user);
-        quizSet.setMultiVideo(false);
-        quizSet.setAttemptTime(LocalDateTime.now());
-        QuizSet savedQuizSet = quizSetRepository.save(quizSet); // Save to get the ID
-
-        if(isForMultiUsers){
-            String quizSetkey = redisService.generateQuizKey(savedQuizSet.getId()); //redis로 key 만들어서 저장
-            List<QuizSetMulti> quizSetMultiList = selectedQuizzes.stream()  //selected quiz로 quizSetMulti에 저장
-                    .map(quiz -> {
-                        QuizSetMulti quizSetMulti = new QuizSetMulti();
-                        quizSetMulti.setQuizSet(savedQuizSet);
-                        quizSetMulti.setQuiz(quiz);
-                        return quizSetMulti;
-                    })
-                    .toList();
-            quizSetMultiRepository.saveAll(quizSetMultiList);
-            return new CreatedQuizSetDTO(savedQuizSet.getId(), null, quizSetkey);
-        }
-
-        else{
-            // 6. Create Quiz Attempts for each selected quiz
-            List<QuizAttempt> quizAttempts = selectedQuizzes.stream().map(quiz -> {
-                QuizAttempt attempt = new QuizAttempt();
-                attempt.setQuizSet(savedQuizSet);
-                attempt.setQuiz(quiz);
-                attempt.setUser(user);
-                // userAnswer and isCorrect are initially null/false by default
-                return attempt;
-            }).collect(Collectors.toList());
-
-            quizAttemptRepository.saveAll(quizAttempts); // Save all attempts (often more efficient)
-
-            // 7. Prepare and Return Response DTO (important!)
-            //    Return only the necessary info (quiz questions, options, quizSetId)
-            //    DO NOT return the Quiz entities directly if they contain the answers.
-            List<QuizQuestionDTO> questionDTOs = selectedQuizzes.stream()
-                    .map(this::mapToQuizQuestionDTO) // Helper method to map Quiz -> QuizQuestionDTO
-                    .toList();
-
-            return new CreatedQuizSetDTO(savedQuizSet.getId(), questionDTOs);
-        }
-    }
     //난이도별 개수 다르게 생성
     @Transactional
     public CreatedQuizSetDTO createQuizSetForUserByCounts(
@@ -127,7 +58,8 @@ public class QuizService {
             int level3Count,
             boolean isForMultiUsers,
             String name,
-            boolean onlyUnsolvedQuizzes
+            boolean onlyUnsolvedQuizzes,
+            long ttlSeconds
     ) {
         // 1. Fetch the User
         User user = userRepository.findById(userId)
@@ -182,7 +114,7 @@ public class QuizService {
         QuizSet savedQuizSet = quizSetRepository.save(quizSet);
 
         if(isForMultiUsers){
-            String quizSetkey = redisService.generateQuizKey(savedQuizSet.getId()); //redis로 key 만들어서 저장
+            String quizSetkey = redisService.generateQuizKey(savedQuizSet.getId(),ttlSeconds); //redis로 key 만들어서 저장
             List<QuizSetMulti> quizSetMultiList = selectedQuizzes.stream()  //selected quiz로 quizSetMulti에 저장
                     .map(quiz -> {
                         QuizSetMulti quizSetMulti = new QuizSetMulti();
@@ -255,15 +187,15 @@ public class QuizService {
         
         Video video = videoRepository.findByYoutubeId(selectedQuizzes.get(0).getYoutubeId())
             .orElseThrow(() -> new RuntimeException("Video not found"));
-
-        Optional<UserVideoCategory> uvcOpt = userVideoCategoryRepository.findByUserIdAndVideoId(userId, video.getId());
-        if (uvcOpt.isEmpty()) {
-            Category category = new Category();
-            category.setId(1L);  //default category로 저장
-            String userVideoName = video.getYoutubeId(); // 또는 원하는 이름
-            UserVideoCategory uvc = new UserVideoCategory(user, video, category, userVideoName);
-            userVideoCategoryRepository.save(uvc);
-        }
+        //퀴즈 풀 때 자동으로 학습한 비디오에 넣는 코드 : 영상 제목 없음 => 주석 처리
+        // Optional<UserVideoCategory> uvcOpt = userVideoCategoryRepository.findByUserIdAndVideoId(userId, video.getId());
+        // if (uvcOpt.isEmpty()) {
+        //     Category category = new Category();
+        //     category.setId(1L);  //default category로 저장
+        //     String userVideoName = video.getYoutubeId(); // 또는 원하는 이름
+        //     UserVideoCategory uvc = new UserVideoCategory(user, video, category, userVideoName);
+        //     userVideoCategoryRepository.save(uvc);
+        // }
 
         return new CreatedQuizSetDTO(quizSetId, questionDTOs);
     }

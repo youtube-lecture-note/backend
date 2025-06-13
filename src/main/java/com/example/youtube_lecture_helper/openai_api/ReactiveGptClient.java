@@ -219,8 +219,6 @@ public class ReactiveGptClient {
                 })
                 .doOnSuccess(result -> log.info("Summary processing completed for videoId: {} with status: {}", videoId, result.getStatus()))
                 .doOnError(e -> log.error("Error during summary processing pipeline for videoId: {}", videoId, e));
-        // Add a timeout for the entire operation if desired
-        // .timeout(Duration.ofMinutes(5));
     }
 
     //DO NOT GENERATE SUBTITLE INSIDE, it is done in frontend

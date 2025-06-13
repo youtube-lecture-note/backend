@@ -69,6 +69,7 @@ public class QuizController {
             @RequestParam String quizSetName,
             @RequestParam(defaultValue = "false") boolean isMulti,      //여러 유저 푸는 공동 퀴즈인지?
             @RequestParam(defaultValue = "false") boolean isRemaining,  //아직 풀지 않은 퀴즈만 생성
+            @RequestParam(defaultValue = "600") long ttlSeconds,
             @AuthenticationPrincipal UserDetails userDetails
     ) {
         if(createSummaryAndQuizService.isQuizProcessing(videoId)) {
@@ -80,7 +81,7 @@ public class QuizController {
         }
         Long userId = ((CustomUserDetails) userDetails).getId();
         QuizService.CreatedQuizSetDTO quizzes = quizService.createQuizSetForUserByCounts(
-                userId, videoId, level1Count, level2Count, level3Count, isMulti, quizSetName, isRemaining
+                userId, videoId, level1Count, level2Count, level3Count, isMulti, quizSetName, isRemaining,ttlSeconds
         );
         return ApiResponse.buildResponse(HttpStatus.OK, "success", quizzes);
     }
@@ -134,24 +135,6 @@ public class QuizController {
             // 기본 요청: 전체 퀴즈 기록 조회
             return ResponseEntity.ok(quizAttemptService.getQuizHistorySummaries(userId));
         }
-    }
-    //한명이 quizSet 생성 요청하면 QuizSetMulti 생성
-    @GetMapping("/api/quizzes/multi/create")
-    public ResponseEntity<?> createQuizSetMulti(
-            @RequestParam String videoId,
-            @RequestParam Integer difficulty,
-            @RequestParam Integer count,
-            @AuthenticationPrincipal UserDetails userDetails
-    ){
-        Long userId = ((CustomUserDetails)userDetails).getId();
-        if(createSummaryAndQuizService.isQuizProcessing(videoId)) {
-            return ApiResponse.buildResponse(
-                    HttpStatus.BAD_REQUEST,
-                    "퀴즈를 생성 중입니다.",
-                    null
-            );
-        }
-        return ResponseEntity.ok(quizService.createQuizSetForUser(userId,difficulty,videoId,count,true));
     }
 
     //redisKey로 만든 quizSet 가져오기

@@ -17,7 +17,7 @@ import java.util.List;
 public interface QuizAttemptRepository  extends JpaRepository<QuizAttempt,Long> {
     @Query("SELECT " +
         "  q.youtubeId AS youtubeId, " +
-        "  COALESCE(uvc.userVideoName, q.youtubeId) AS userVideoName, " +
+        "  COALESCE(uvc.userVideoName, qs.name, q.youtubeId) AS userVideoName, " +
         "  v.id AS videoId, " +
         "  qs.attemptTime AS date, " +
         "  qs.id AS quizSetId, " +
@@ -29,7 +29,7 @@ public interface QuizAttemptRepository  extends JpaRepository<QuizAttempt,Long> 
         "JOIN Video v ON q.youtubeId = v.youtubeId " +
         "LEFT JOIN UserVideoCategory uvc ON uvc.video.id = v.id AND uvc.user.id = :userId " +
         "WHERE qa.user.id = :userId " +
-        "GROUP BY q.youtubeId, uvc.userVideoName, v.id, qs.attemptTime, qs.id " +
+        "GROUP BY q.youtubeId, uvc.userVideoName, v.id, qs.attemptTime, qs.id, qs.name " +
         "ORDER BY qs.attemptTime DESC")
     List<QuizHistorySummaryDto> findQuizSetSummariesByUserId(@Param("userId") Long userId);
 
