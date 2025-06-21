@@ -13,6 +13,12 @@
   <img src="https://img.shields.io/badge/Google_OAuth-4285F4?style=for-the-badge&logo=google&logoColor=white" alt="Google OAuth"/>
 </p>
 
+## 개발 환경
+
+- Java 17 (JDK)
+- Spring Boot 3.4.4
+- Gradle 8.13
+
 ---
 
 ## 기능
