@@ -18,7 +18,9 @@ def get_youtube_transcript():
                 proxy_password="password",
             )
         )
-        transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['ko'], proxies={"http": "http://uwhjekjl-rotate:sg2j8g7mpsjc@p.webshare.io:80", "https": "http://uwhjekjl-rotate:sg2j8g7mpsjc@p.webshare.io:80"})
+        transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['ko'], 
+                                                         proxies={"http": "http://your-proxy-server", 
+                                                                  "https": "http://your-proxy-server"})
         # 사용 가능한 자막 목록 확인
         # transcript_list = ytt_api.list(video_id)
         # transcript = transcript_list.find_transcript(['ko', 'en'])
