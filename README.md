@@ -55,4 +55,22 @@ transcript.api.url=transcript-server-url
 </code></pre>
 
 ### 3. `.env` 파일 포함하여 실행
+
 ---
+
+### 4. Transcript Server 실행
+
+이 프로젝트는 유튜브 자막을 처리하기 위한 별도의 Python Flask 서버를 사용합니다.  
+아래 단계를 따라 transcript server를 실행하세요:
+
+#### (1) Python 가상환경 설정 및 패키지 설치
+
+```bash
+cd transcript-server  # Flask 코드가 위치한 디렉토리로 이동
+python -m venv venv
+source venv/bin/activate  # (Windows의 경우: venv\Scripts\activate)
+pip install -r requirements.txt
+```
+
+#### (2) Flask 서버 실행
+```python transcript-server.py```
